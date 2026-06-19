@@ -3,16 +3,17 @@ import BookingsClient from './BookingsClient'
 
 export default async function BookingsPage() {
   const supabase = await createClient()
+  const { data: { user } } = await supabase.auth.getUser()
   const today = new Date().toISOString().split('T')[0]
-  const nextWeek = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString().split('T')[0]
 
   const [
     { data: bookings },
     { data: rooms },
+    { data: profile },
   ] = await Promise.all([
     supabase
       .from('bookings')
-      .select('*, room:rooms(room_no, building), customer:customers(full_name, phone)')
+      .select('*, room:rooms(room_no, building), customer:customers(full_name, phone), transactions(id, is_closed)')
       .neq('status', 'cancelled')
       .order('checkin_date', { ascending: false })
       .limit(200),
@@ -21,9 +22,12 @@ export default async function BookingsPage() {
       .select('id, room_no, building, price_per_night, is_active, is_monthly')
       .eq('is_active', true)
       .order('room_no'),
+    supabase
+      .from('profiles')
+      .select('full_name, role')
+      .eq('id', user.id)
+      .single(),
   ])
-
-  const allActiveBookings = bookings ?? []
 
   return (
     <div className="p-4 md:p-6 space-y-4 md:space-y-6">
@@ -32,10 +36,11 @@ export default async function BookingsPage() {
         <p className="text-sm text-gray-500 mt-0.5">จัดการการจอง เช็คอิน และเช็คเอาท์</p>
       </div>
       <BookingsClient
-        bookings={allActiveBookings}
+        bookings={bookings ?? []}
         rooms={rooms ?? []}
         today={today}
-        nextWeek={nextWeek}
+        role={profile?.role ?? 'staff'}
+        adminName={profile?.full_name ?? ''}
       />
     </div>
   )

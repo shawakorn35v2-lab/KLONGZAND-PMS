@@ -129,3 +129,52 @@ export async function cancelBooking(bookingId) {
   revalidatePath('/bookings')
   return { success: true }
 }
+
+export async function adminUpdateBooking(bookingId, fields, adminName, oldRoomNo, newRoomNo) {
+  const supabase = await createClient()
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) return { error: 'ไม่ได้เข้าสู่ระบบ' }
+
+  const { data: profile } = await supabase.from('profiles').select('role').eq('id', user.id).single()
+  if (profile?.role !== 'admin') return { error: 'ไม่มีสิทธิ์ดำเนินการนี้' }
+
+  // Auto-append room transfer log to note
+  let note = fields.note ?? ''
+  if (oldRoomNo && newRoomNo && oldRoomNo !== newRoomNo) {
+    const logLine = `ย้ายจากห้อง ${oldRoomNo} → ${newRoomNo} เมื่อ ${new Date().toLocaleDateString('th-TH')} โดย ${adminName}`
+    note = note ? `${note}\n${logLine}` : logLine
+  }
+
+  const { error } = await supabase.from('bookings').update({
+    room_id: fields.room_id,
+    channel: fields.channel,
+    checkin_date: fields.checkin_date,
+    checkout_date: fields.checkout_date,
+    price: Number(fields.price) || 0,
+    deposit: Number(fields.deposit) || 0,
+    status: fields.status,
+    note: note || null,
+  }).eq('id', bookingId)
+
+  if (error) return { error: error.message }
+  revalidatePath('/bookings')
+  revalidatePath('/transactions')
+  revalidatePath('/dashboard')
+  return { success: true }
+}
+
+export async function adminDeleteBooking(bookingId) {
+  const supabase = await createClient()
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) return { error: 'ไม่ได้เข้าสู่ระบบ' }
+
+  const { data: profile } = await supabase.from('profiles').select('role').eq('id', user.id).single()
+  if (profile?.role !== 'admin') return { error: 'ไม่มีสิทธิ์ดำเนินการนี้' }
+
+  const { error } = await supabase.from('bookings').delete().eq('id', bookingId)
+  if (error) return { error: error.message }
+  revalidatePath('/bookings')
+  revalidatePath('/transactions')
+  revalidatePath('/dashboard')
+  return { success: true }
+}

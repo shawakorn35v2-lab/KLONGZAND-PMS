@@ -96,4 +96,23 @@
 - Responsive ใช้งานบนจอคอมพิวเตอร์และแท็บเล็ตได้ดี
 - ใช้สีและ badge บอกสถานะห้อง/การจองให้ดูง่าย (เขียว=ว่าง, แดง=ไม่ว่าง, เหลือง=ทำความสะอาด)
 
-## 7
+## 7. ข้อกำหนดทางเทคนิค
+- ทุก Server Action ให้ใช้ `'use server'` และ `revalidatePath()` หลัง mutation
+- ทุก Client Component ที่กดปุ่มแล้วเรียก Server Action ให้ใช้ `router.refresh()` เพื่อ sync ข้อมูล
+- ห้าม hardcode ค่า environment variable ใดๆ ในโค้ด
+- ทุกหน้าต้อง build ผ่านด้วย `next build` ไม่มี error
+- UI ทั้งหมด responsive รองรับมือถือ (md: breakpoint สำหรับ sidebar)
+
+## 8. สถานะที่สร้างแล้ว (อัปเดต 2026-06-20)
+หน้าและฟีเจอร์ที่สร้างเสร็จแล้วในโปรเจกต์นี้:
+- ✅ `/login` — Supabase Auth login
+- ✅ `/dashboard` — สรุปยอด, RoomGrid, กราฟ recharts, Export Excel/PDF
+- ✅ `/bookings` — จอง/เช็คอิน/เช็คเอาท์, ตารางห้องว่าง 7 วัน
+- ✅ `/customers` — รายชื่อลูกค้า, ค้นหา, ประวัติการเข้าพัก
+- ✅ `/transactions` — รายรับ-รายจ่าย, ปิดยอดประจำวัน, Export
+- ✅ `/housekeeping` — สถานะห้อง, เปลี่ยนสถานะ, log
+- ✅ `/rooms` — จัดการห้อง 19 ห้อง, toggle monthly
+- ✅ `/rooms/[id]/meter` — มิเตอร์ไฟ/ค่าน้ำ รายเดือน
+- ✅ `/inventory` — สต๊อกของใช้, รับเข้า/เบิกออก, คำขอ, ประวัติ
+- ✅ Sidebar responsive, hamburger menu บนมือถือ
+- ✅ ทุกหน้า responsive (p-4 md:p-6, grid-cols-1 sm:grid-cols-X)
