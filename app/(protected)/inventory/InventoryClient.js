@@ -2,7 +2,7 @@
 
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
-import { addStockMovement, createInventoryRequest, updateRequestStatus, createInventoryItem } from '@/app/actions/inventory'
+import { addStockMovement, createInventoryRequest, updateRequestStatus, createInventoryItem, seedCommonAreaItems } from '@/app/actions/inventory'
 
 function formatDate(d) {
   if (!d) return '—'
@@ -37,6 +37,7 @@ export default function InventoryClient({ items, movements, requests, rooms, rol
   const [itemForm, setItemForm] = useState({ name: '', unit: 'ชิ้น', reorder_point: '' })
   const [itemLoading, setItemLoading] = useState(false)
   const [itemError, setItemError] = useState('')
+  const [seeding, setSeeding] = useState(false)
 
   // Stock movement form
   const [moveType, setMoveType] = useState('stock_out')
@@ -159,7 +160,20 @@ export default function InventoryClient({ items, movements, requests, rooms, rol
       {tab === 'stock' && (
         <div className="space-y-4">
           {isAdmin && (
-            <div className="flex justify-end">
+            <div className="flex flex-wrap justify-end gap-2">
+              <button
+                onClick={async () => {
+                  setSeeding(true)
+                  const r = await seedCommonAreaItems()
+                  setSeeding(false)
+                  if (r.error) alert(r.error)
+                  else router.refresh()
+                }}
+                disabled={seeding}
+                className="btn-secondary text-sm"
+              >
+                {seeding ? 'กำลังเพิ่ม...' : '🧹 นำเข้ารายการพื้นที่ส่วนกลาง'}
+              </button>
               <button onClick={() => setShowItemForm(!showItemForm)} className="btn-primary">
                 {showItemForm ? '✕ ปิด' : '+ เพิ่มรายการใหม่'}
               </button>

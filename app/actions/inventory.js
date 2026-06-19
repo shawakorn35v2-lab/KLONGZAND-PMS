@@ -46,6 +46,30 @@ export async function createInventoryRequest({ item_id, requested_qty, note }) {
   return {}
 }
 
+export async function seedCommonAreaItems() {
+  const supabase = await createClient()
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) return { error: 'ไม่ได้เข้าสู่ระบบ' }
+
+  const items = [
+    { name: 'ผงซักฟอก', unit: 'ถุง', reorder_point: 5 },
+    { name: 'ไฮเตอร์', unit: 'ขวด', reorder_point: 3 },
+    { name: 'น้ำยาปรับผ้านุ่ม', unit: 'ขวด', reorder_point: 3 },
+    { name: 'น้ำยาทำความสะอาด', unit: 'ขวด', reorder_point: 5 },
+    { name: 'ไม้กวาด', unit: 'ด้าม', reorder_point: 2 },
+    { name: 'ผ้าถูพื้น', unit: 'ผืน', reorder_point: 3 },
+    { name: 'ถุงขยะ', unit: 'ม้วน', reorder_point: 5 },
+  ]
+
+  const { error } = await supabase
+    .from('inventory_items')
+    .upsert(items, { onConflict: 'name', ignoreDuplicates: true })
+
+  if (error) return { error: error.message }
+  revalidatePath('/inventory')
+  return { success: true, count: items.length }
+}
+
 export async function updateRequestStatus(id, status) {
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
