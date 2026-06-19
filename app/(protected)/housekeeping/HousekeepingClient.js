@@ -58,7 +58,7 @@ export default function HousekeepingClient({ rooms: initialRooms, latestLogs }) 
   return (
     <div className="space-y-4">
       {/* Summary */}
-      <div className="grid grid-cols-3 gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
         <div className="card border-t-4 border-t-green-500 text-center py-4">
           <p className="text-3xl font-bold text-green-600">{counts.clean}</p>
           <p className="text-xs text-gray-500 mt-1">สะอาด</p>

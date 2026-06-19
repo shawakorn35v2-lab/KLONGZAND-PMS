@@ -23,9 +23,9 @@ export default async function HousekeepingPage() {
   })
 
   return (
-    <div className="p-6">
-      <div className="mb-6">
-        <h1 className="text-2xl font-bold text-gray-900">ทำความสะอาด</h1>
+    <div className="p-4 md:p-6">
+      <div className="mb-4 md:mb-6">
+        <h1 className="text-xl md:text-2xl font-bold text-gray-900">ทำความสะอาด</h1>
         <p className="text-sm text-gray-500 mt-0.5">อัปเดตสถานะห้องพักและบันทึก log</p>
       </div>
       <HousekeepingClient rooms={rooms ?? []} latestLogs={latestLogs} />

@@ -83,7 +83,7 @@ export default function BookingForm({ rooms, bookings, onClose }) {
         <CustomerSearchInput onSelect={setCustomerData} />
       </div>
 
-      <div className="grid grid-cols-2 gap-3">
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
         <div>
           <label className="label">วันเช็คอิน *</label>
           <input type="date" required value={form.checkinDate} onChange={e => set('checkinDate', e.target.value)} className="input" />
@@ -116,7 +116,7 @@ export default function BookingForm({ rooms, bookings, onClose }) {
         </select>
       </div>
 
-      <div className="grid grid-cols-2 gap-3">
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
         <div>
           <label className="label">ราคารวม (บาท)</label>
           <input type="number" min="0" step="0.01" value={form.price} onChange={e => set('price', e.target.value)} className="input" placeholder="0.00" />

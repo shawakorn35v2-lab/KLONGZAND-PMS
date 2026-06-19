@@ -64,10 +64,10 @@ export default async function DashboardPage() {
   ]
 
   return (
-    <div className="p-6 space-y-6">
-      <div className="flex items-center justify-between">
+    <div className="p-4 md:p-6 space-y-4 md:space-y-6">
+      <div className="flex items-center justify-between gap-3">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900">แดชบอร์ด</h1>
+          <h1 className="text-xl md:text-2xl font-bold text-gray-900">แดชบอร์ด</h1>
           <p className="text-sm text-gray-500 mt-0.5">
             {new Date().toLocaleDateString('th-TH', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}
           </p>
@@ -94,7 +94,7 @@ export default async function DashboardPage() {
       {/* Month stats */}
       <div>
         <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-3">เดือนนี้</p>
-        <div className="grid grid-cols-3 gap-4">
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
           <StatCard label="รายรับเดือนนี้" value={fmt(monthStats.income)} color="green" />
           <StatCard label="รายจ่ายเดือนนี้" value={fmt(monthStats.expense)} color="red" />
           <StatCard label="กำไรสุทธิเดือนนี้" value={fmt(monthStats.net)} color={monthStats.net >= 0 ? 'blue' : 'red'} />

@@ -9,9 +9,9 @@ export default async function CustomersPage() {
     .order('full_name')
 
   return (
-    <div className="p-6">
-      <div className="mb-6">
-        <h1 className="text-2xl font-bold text-gray-900">ลูกค้า</h1>
+    <div className="p-4 md:p-6">
+      <div className="mb-4 md:mb-6">
+        <h1 className="text-xl md:text-2xl font-bold text-gray-900">ลูกค้า</h1>
         <p className="text-sm text-gray-500 mt-0.5">{(customers ?? []).length} รายการ</p>
       </div>
       <CustomersClient customers={customers ?? []} />

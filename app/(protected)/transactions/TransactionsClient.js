@@ -48,7 +48,7 @@ export default function TransactionsClient({
   return (
     <div className="space-y-6">
       {/* Summary cards */}
-      <div className="grid grid-cols-3 gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
         <div className="card border-t-4 border-t-green-500">
           <p className="text-xs font-semibold text-gray-500 uppercase">รายรับวันนี้</p>
           <p className="text-2xl font-bold text-green-600 mt-1">{formatCurrency(todayIncome)}</p>
@@ -105,7 +105,7 @@ export default function TransactionsClient({
             รีเซ็ต
           </button>
         </div>
-        <div className="mt-3 flex gap-6 text-sm">
+        <div className="mt-3 flex flex-wrap gap-4 text-sm">
           <span>รายรับรวม: <strong className="text-green-600">{formatCurrency(totalIncome)}</strong></span>
           <span>รายจ่ายรวม: <strong className="text-red-600">{formatCurrency(totalExpense)}</strong></span>
           <span>กำไรสุทธิ: <strong className={totalIncome - totalExpense >= 0 ? 'text-blue-600' : 'text-red-600'}>{formatCurrency(totalIncome - totalExpense)}</strong></span>

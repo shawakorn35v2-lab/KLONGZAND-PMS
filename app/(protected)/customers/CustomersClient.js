@@ -38,15 +38,15 @@ export default function CustomersClient({ customers: initialCustomers }) {
 
   return (
     <div className="space-y-4">
-      <div className="flex items-center gap-3">
+      <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3">
         <input
           type="text"
           value={query}
           onChange={e => setQuery(e.target.value)}
           placeholder="ค้นหาชื่อหรือเบอร์โทร..."
-          className="input max-w-sm"
+          className="input sm:max-w-sm"
         />
-        <button onClick={() => setShowForm(!showForm)} className="btn-primary">
+        <button onClick={() => setShowForm(!showForm)} className="btn-primary sm:w-auto justify-center">
           {showForm ? '✕ ปิด' : '+ เพิ่มลูกค้าใหม่'}
         </button>
       </div>

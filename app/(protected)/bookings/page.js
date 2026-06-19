@@ -26,9 +26,9 @@ export default async function BookingsPage() {
   const allActiveBookings = bookings ?? []
 
   return (
-    <div className="p-6 space-y-6">
+    <div className="p-4 md:p-6 space-y-4 md:space-y-6">
       <div>
-        <h1 className="text-2xl font-bold text-gray-900">จองห้องพัก</h1>
+        <h1 className="text-xl md:text-2xl font-bold text-gray-900">จองห้องพัก</h1>
         <p className="text-sm text-gray-500 mt-0.5">จัดการการจอง เช็คอิน และเช็คเอาท์</p>
       </div>
       <BookingsClient

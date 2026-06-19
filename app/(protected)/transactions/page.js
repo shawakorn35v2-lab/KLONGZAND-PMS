@@ -38,9 +38,9 @@ export default async function TransactionsPage({ searchParams }) {
   const todayExpense = todayTxs.filter(t => t.tx_type === 'expense').reduce((s, t) => s + Number(t.amount), 0)
 
   return (
-    <div className="p-6 space-y-6">
+    <div className="p-4 md:p-6 space-y-4 md:space-y-6">
       <div>
-        <h1 className="text-2xl font-bold text-gray-900">รายรับ-รายจ่าย</h1>
+        <h1 className="text-xl md:text-2xl font-bold text-gray-900">รายรับ-รายจ่าย</h1>
         <p className="text-sm text-gray-500 mt-0.5">บันทึกและดูรายรับ-รายจ่ายประจำวัน</p>
       </div>
       <TransactionsClient

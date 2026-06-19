@@ -10,9 +10,9 @@ export default async function RoomsPage() {
     .order('room_no')
 
   return (
-    <div className="p-6">
-      <div className="mb-6">
-        <h1 className="text-2xl font-bold text-gray-900">จัดการห้องพัก</h1>
+    <div className="p-4 md:p-6">
+      <div className="mb-4 md:mb-6">
+        <h1 className="text-xl md:text-2xl font-bold text-gray-900">จัดการห้องพัก</h1>
         <p className="text-sm text-gray-500 mt-0.5">19 ห้อง — อาคาร A, B, C</p>
       </div>
       <div className="card p-0 overflow-hidden">
