@@ -121,12 +121,23 @@ export async function checkoutBooking(bookingId) {
 
 export async function cancelBooking(bookingId) {
   const supabase = await createClient()
+
+  // ลบ transactions ที่ยังไม่ปิดยอดที่ผูกกับ booking นี้
+  await supabase
+    .from('transactions')
+    .delete()
+    .eq('booking_id', bookingId)
+    .eq('is_closed', false)
+
   const { error } = await supabase
     .from('bookings')
     .update({ status: 'cancelled' })
     .eq('id', bookingId)
   if (error) return { error: error.message }
+
   revalidatePath('/bookings')
+  revalidatePath('/transactions')
+  revalidatePath('/dashboard')
   return { success: true }
 }
 
@@ -189,8 +200,15 @@ export async function adminDeleteBooking(bookingId) {
   const { data: profile } = await supabase.from('profiles').select('role').eq('id', user.id).single()
   if (profile?.role !== 'admin') return { error: 'ไม่มีสิทธิ์ดำเนินการนี้' }
 
+  // แอดมินลบทุก transaction ที่ผูกกับ booking นี้ (รวมที่ปิดยอดแล้ว)
+  await supabase
+    .from('transactions')
+    .delete()
+    .eq('booking_id', bookingId)
+
   const { error } = await supabase.from('bookings').delete().eq('id', bookingId)
   if (error) return { error: error.message }
+
   revalidatePath('/bookings')
   revalidatePath('/transactions')
   revalidatePath('/dashboard')
