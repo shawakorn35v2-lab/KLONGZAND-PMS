@@ -54,6 +54,7 @@ export default function BookingsClient({ bookings, rooms, today, role, adminName
   // Admin edit modal
   const [editBooking, setEditBooking] = useState(null)
   const [editForm, setEditForm] = useState({})
+  const [transferReason, setTransferReason] = useState('')
   const [editLoading, setEditLoading] = useState(false)
   const [editError, setEditError] = useState('')
 
@@ -79,6 +80,7 @@ export default function BookingsClient({ bookings, rooms, today, role, adminName
       status: b.status,
       note: b.note ?? '',
     })
+    setTransferReason('')
     setEditError('')
   }
 
@@ -119,7 +121,12 @@ export default function BookingsClient({ bookings, rooms, today, role, adminName
     const newRoomNo = newRoom?.room_no
 
     setEditLoading(true)
-    const result = await adminUpdateBooking(editBooking.id, editForm, adminName, oldRoomNo, newRoomNo)
+    const result = await adminUpdateBooking(
+      editBooking.id, editForm, adminName,
+      oldRoomNo, newRoomNo,
+      editBooking.room_id,
+      transferReason
+    )
     setEditLoading(false)
     if (result?.error) { setEditError(result.error); return }
     setEditBooking(null)
@@ -332,9 +339,21 @@ export default function BookingsClient({ bookings, rooms, today, role, adminName
                   ))}
                 </select>
                 {editForm.room_id !== editBooking.room_id && (
-                  <p className="text-xs text-amber-600 mt-1">
-                    ⚠ จะบันทึกประวัติย้ายห้อง {editBooking.room?.room_no} → {selectedRoom?.room_no} ใน note อัตโนมัติ
-                  </p>
+                  <div className="mt-2 space-y-2">
+                    <div>
+                      <label className="label">เหตุผลการย้ายห้อง</label>
+                      <input
+                        type="text"
+                        value={transferReason}
+                        onChange={e => setTransferReason(e.target.value)}
+                        className="input"
+                        placeholder="เช่น ห้องมีปัญหา / ลูกค้าขอย้าย"
+                      />
+                    </div>
+                    <p className="text-xs text-amber-600">
+                      ⚠ ห้อง {editBooking.room?.room_no} จะถูกตั้งเป็น "รอทำความสะอาด" อัตโนมัติ และบันทึกใน note
+                    </p>
+                  </div>
                 )}
               </div>
 

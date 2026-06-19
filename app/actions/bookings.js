@@ -130,7 +130,7 @@ export async function cancelBooking(bookingId) {
   return { success: true }
 }
 
-export async function adminUpdateBooking(bookingId, fields, adminName, oldRoomNo, newRoomNo) {
+export async function adminUpdateBooking(bookingId, fields, adminName, oldRoomNo, newRoomNo, oldRoomId, transferReason) {
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) return { error: 'ไม่ได้เข้าสู่ระบบ' }
@@ -138,10 +138,13 @@ export async function adminUpdateBooking(bookingId, fields, adminName, oldRoomNo
   const { data: profile } = await supabase.from('profiles').select('role').eq('id', user.id).single()
   if (profile?.role !== 'admin') return { error: 'ไม่มีสิทธิ์ดำเนินการนี้' }
 
+  const roomChanged = oldRoomId && fields.room_id && fields.room_id !== oldRoomId
+
   // Auto-append room transfer log to note
   let note = fields.note ?? ''
-  if (oldRoomNo && newRoomNo && oldRoomNo !== newRoomNo) {
-    const logLine = `ย้ายจากห้อง ${oldRoomNo} → ${newRoomNo} เมื่อ ${new Date().toLocaleDateString('th-TH')} โดย ${adminName}`
+  if (roomChanged && oldRoomNo && newRoomNo) {
+    const reasonPart = transferReason ? ` เหตุผล: ${transferReason}` : ''
+    const logLine = `ย้ายจากห้อง ${oldRoomNo} → ${newRoomNo} เมื่อ ${new Date().toLocaleDateString('th-TH')} โดย ${adminName}${reasonPart}`
     note = note ? `${note}\n${logLine}` : logLine
   }
 
@@ -157,6 +160,21 @@ export async function adminUpdateBooking(bookingId, fields, adminName, oldRoomNo
   }).eq('id', bookingId)
 
   if (error) return { error: error.message }
+
+  // เมื่อย้ายห้อง: ตั้งห้องเก่าเป็น dirty + บันทึก housekeeping log
+  if (roomChanged) {
+    const hkNote = `ลูกค้าย้ายออกไปห้อง ${newRoomNo}${transferReason ? ` (${transferReason})` : ''}`
+    await supabase.from('rooms').update({ housekeeping_status: 'dirty' }).eq('id', oldRoomId)
+    await supabase.from('housekeeping_log').insert({
+      room_id: oldRoomId,
+      status: 'dirty',
+      note: hkNote,
+      updated_by: user.id,
+    })
+    revalidatePath('/housekeeping')
+    revalidatePath('/rooms')
+  }
+
   revalidatePath('/bookings')
   revalidatePath('/transactions')
   revalidatePath('/dashboard')
