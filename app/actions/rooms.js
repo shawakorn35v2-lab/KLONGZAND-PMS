@@ -21,3 +21,11 @@ export async function saveMeterReading(data) {
   revalidatePath(`/rooms/${data.room_id}/meter`)
   return { success: true }
 }
+
+export async function deleteMeterReading(id, roomId) {
+  const supabase = await createClient()
+  const { error } = await supabase.from('meter_readings').delete().eq('id', id)
+  if (error) return { error: error.message }
+  revalidatePath(`/rooms/${roomId}/meter`)
+  return { success: true }
+}
