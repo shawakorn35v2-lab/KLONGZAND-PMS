@@ -250,7 +250,7 @@ export default function BookingsClient({ bookings, rooms, today, role, adminName
                           className="px-2.5 py-1 text-xs bg-purple-600 text-white rounded hover:bg-purple-700 disabled:opacity-50"
                         >เช็คเอาท์</button>
                       )}
-                      {b.status === 'reserved' && !isAdmin && (
+                      {b.status === 'reserved' && (
                         <button
                           onClick={() => handleAction('cancel', b.id)}
                           disabled={loadingId === b.id}
