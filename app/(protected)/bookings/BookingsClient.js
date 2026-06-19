@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useMemo } from 'react'
 import { useRouter } from 'next/navigation'
 import BookingForm from '@/components/BookingForm'
 import { BookingStatusBadge, ChannelBadge } from '@/components/RoomStatusBadge'
@@ -31,6 +31,18 @@ const STATUS_OPTIONS = [
   { value: 'cancelled', label: 'ยกเลิก' },
 ]
 
+// หาห้องที่ว่างในช่วงวันที่ที่เลือก (ไม่นับ booking ปัจจุบันที่กำลังแก้ไข)
+function getConflictingBooking(bookings, roomId, checkin, checkout, excludeBookingId) {
+  if (!roomId || !checkin || !checkout) return null
+  return bookings.find(b =>
+    b.id !== excludeBookingId &&
+    b.room_id === roomId &&
+    b.status !== 'cancelled' &&
+    b.checkin_date < checkout &&
+    b.checkout_date > checkin
+  ) ?? null
+}
+
 export default function BookingsClient({ bookings, rooms, today, role, adminName }) {
   const router = useRouter()
   const isAdmin = role === 'admin'
@@ -39,13 +51,21 @@ export default function BookingsClient({ bookings, rooms, today, role, adminName
   const [statusFilter, setStatusFilter] = useState('')
   const [loadingId, setLoadingId] = useState(null)
 
-  // Admin edit modal state
+  // Admin edit modal
   const [editBooking, setEditBooking] = useState(null)
   const [editForm, setEditForm] = useState({})
   const [editLoading, setEditLoading] = useState(false)
   const [editError, setEditError] = useState('')
 
   const filtered = bookings.filter(b => !statusFilter || b.status === statusFilter)
+
+  // Conflict detection: ห้องว่างไหมในช่วงที่แก้ไข
+  const editConflict = useMemo(() =>
+    editBooking
+      ? getConflictingBooking(bookings, editForm.room_id, editForm.checkin_date, editForm.checkout_date, editBooking.id)
+      : null,
+    [bookings, editForm.room_id, editForm.checkin_date, editForm.checkout_date, editBooking]
+  )
 
   function openEdit(b) {
     setEditBooking(b)
@@ -60,6 +80,10 @@ export default function BookingsClient({ bookings, rooms, today, role, adminName
       note: b.note ?? '',
     })
     setEditError('')
+  }
+
+  function setEdit(field, value) {
+    setEditForm(p => ({ ...p, [field]: value }))
   }
 
   async function handleAction(action, id) {
@@ -86,6 +110,10 @@ export default function BookingsClient({ bookings, rooms, today, role, adminName
       if (!confirm('รายการนี้ปิดยอดไปแล้ว การแก้ไขราคา/มัดจำจะกระทบยอดที่ปิดไปแล้ว ยืนยันหรือไม่?')) return
     }
 
+    if (editConflict) {
+      if (!confirm(`ห้อง ${rooms.find(r => r.id === editForm.room_id)?.room_no} มีการจองของ ${editConflict.customer?.full_name ?? 'ลูกค้าอื่น'} ทับช่วงวันนี้อยู่แล้ว ยืนยันบันทึกทับหรือไม่?`)) return
+    }
+
     const oldRoomNo = editBooking.room?.room_no
     const newRoom = rooms.find(r => r.id === editForm.room_id)
     const newRoomNo = newRoom?.room_no
@@ -101,7 +129,7 @@ export default function BookingsClient({ bookings, rooms, today, role, adminName
   async function handleDelete(b) {
     const hasClosedTx = b.transactions?.some(t => t.is_closed)
     const msg = hasClosedTx
-      ? `ลบการจองห้อง ${b.room?.room_no ?? ''}? (มี transaction ที่ปิดยอดแล้วผูกอยู่ ข้อมูลการเงินอาจคลาดเคลื่อน)`
+      ? `ลบการจองห้อง ${b.room?.room_no ?? ''}?\n(มี transaction ที่ปิดยอดแล้วผูกอยู่)`
       : `ลบการจองห้อง ${b.room?.room_no ?? ''}?`
     if (!confirm(msg)) return
     setLoadingId(b.id)
@@ -111,21 +139,27 @@ export default function BookingsClient({ bookings, rooms, today, role, adminName
     else router.refresh()
   }
 
-  // Availability grid
+  // Availability grid — คำนวณจาก bookings ที่รับมา (จะ re-render เมื่อ router.refresh ดึงข้อมูลใหม่)
   const days = Array.from({ length: 7 }, (_, i) => {
     const d = new Date(today)
     d.setDate(d.getDate() + i)
     return d.toISOString().split('T')[0]
   })
 
-  function isOccupied(roomId, day) {
-    return bookings.some(b =>
-      b.room_id === roomId &&
-      b.status !== 'cancelled' &&
-      b.checkin_date <= day &&
-      b.checkout_date > day
-    )
-  }
+  const occupiedSet = useMemo(() => {
+    const set = new Set()
+    bookings.forEach(b => {
+      if (b.status === 'cancelled') return
+      days.forEach(d => {
+        if (b.checkin_date <= d && b.checkout_date > d) {
+          set.add(`${b.room_id}__${d}`)
+        }
+      })
+    })
+    return set
+  }, [bookings])
+
+  const selectedRoom = editBooking ? rooms.find(r => r.id === editForm.room_id) : null
 
   return (
     <div className="space-y-6">
@@ -165,7 +199,7 @@ export default function BookingsClient({ bookings, rooms, today, role, adminName
                 <tr key={room.id}>
                   <td className="px-2 py-1.5 font-semibold text-gray-700">{room.room_no}</td>
                   {days.map(d => {
-                    const occ = isOccupied(room.id, d)
+                    const occ = occupiedSet.has(`${room.id}__${d}`)
                     return (
                       <td key={d} className="px-1 py-1.5 text-center rounded">
                         <span className={`inline-block w-full rounded text-center py-0.5 ${occ ? 'bg-red-200 text-red-700' : 'bg-green-100 text-green-700'}`}>
@@ -235,48 +269,37 @@ export default function BookingsClient({ bookings, rooms, today, role, adminName
                   <td className="table-td"><BookingStatusBadge status={b.status} /></td>
                   <td className="table-td">
                     <div className="flex flex-wrap gap-1.5">
-                      {/* Staff + Admin actions */}
                       {b.status === 'reserved' && (
-                        <button
-                          onClick={() => handleAction('checkin', b.id)}
-                          disabled={loadingId === b.id}
-                          className="px-2.5 py-1 text-xs bg-blue-600 text-white rounded hover:bg-blue-700 disabled:opacity-50"
-                        >เช็คอิน</button>
+                        <button onClick={() => handleAction('checkin', b.id)} disabled={loadingId === b.id}
+                          className="px-2.5 py-1 text-xs bg-blue-600 text-white rounded hover:bg-blue-700 disabled:opacity-50">
+                          เช็คอิน
+                        </button>
                       )}
                       {b.status === 'checked_in' && (
-                        <button
-                          onClick={() => handleAction('checkout', b.id)}
-                          disabled={loadingId === b.id}
-                          className="px-2.5 py-1 text-xs bg-purple-600 text-white rounded hover:bg-purple-700 disabled:opacity-50"
-                        >เช็คเอาท์</button>
+                        <button onClick={() => handleAction('checkout', b.id)} disabled={loadingId === b.id}
+                          className="px-2.5 py-1 text-xs bg-purple-600 text-white rounded hover:bg-purple-700 disabled:opacity-50">
+                          เช็คเอาท์
+                        </button>
                       )}
                       {b.status === 'reserved' && (
-                        <button
-                          onClick={() => handleAction('cancel', b.id)}
-                          disabled={loadingId === b.id}
-                          className="px-2.5 py-1 text-xs bg-gray-200 text-gray-700 rounded hover:bg-red-100 hover:text-red-700 disabled:opacity-50"
-                        >ยกเลิก</button>
+                        <button onClick={() => handleAction('cancel', b.id)} disabled={loadingId === b.id}
+                          className="px-2.5 py-1 text-xs bg-gray-200 text-gray-700 rounded hover:bg-red-100 hover:text-red-700 disabled:opacity-50">
+                          ยกเลิก
+                        </button>
                       )}
-
-                      {/* Admin-only actions */}
                       {isAdmin && (
                         <>
-                          <button
-                            onClick={() => openEdit(b)}
-                            disabled={loadingId === b.id}
-                            className="px-2.5 py-1 text-xs bg-amber-500 text-white rounded hover:bg-amber-600 disabled:opacity-50"
-                          >✏ แก้ไข</button>
-                          <button
-                            onClick={() => handleDelete(b)}
-                            disabled={loadingId === b.id}
-                            className="px-2.5 py-1 text-xs bg-red-600 text-white rounded hover:bg-red-700 disabled:opacity-50"
-                          >🗑 ลบ</button>
+                          <button onClick={() => openEdit(b)} disabled={loadingId === b.id}
+                            className="px-2.5 py-1 text-xs bg-amber-500 text-white rounded hover:bg-amber-600 disabled:opacity-50">
+                            ✏ แก้ไข
+                          </button>
+                          <button onClick={() => handleDelete(b)} disabled={loadingId === b.id}
+                            className="px-2.5 py-1 text-xs bg-red-600 text-white rounded hover:bg-red-700 disabled:opacity-50">
+                            🗑 ลบ
+                          </button>
                         </>
                       )}
-
-                      {b.note && (
-                        <span title={b.note} className="text-gray-400 cursor-help">📝</span>
-                      )}
+                      {b.note && <span title={b.note} className="text-gray-400 cursor-help">📝</span>}
                     </div>
                   </td>
                 </tr>
@@ -292,7 +315,7 @@ export default function BookingsClient({ bookings, rooms, today, role, adminName
           <div className="bg-white rounded-t-2xl sm:rounded-2xl shadow-2xl w-full sm:max-w-lg p-6 max-h-[90vh] overflow-y-auto">
             <div className="flex items-center justify-between mb-4">
               <h3 className="text-base font-bold text-gray-900">
-                แก้ไขการจอง — {editBooking.customer?.full_name ?? ''}
+                แก้ไข / โยกวันเข้าพัก — {editBooking.customer?.full_name ?? ''}
               </h3>
               {editBooking.transactions?.some(t => t.is_closed) && (
                 <span className="text-xs bg-amber-100 text-amber-700 px-2 py-1 rounded-full font-medium">🔒 ปิดยอดแล้ว</span>
@@ -302,19 +325,15 @@ export default function BookingsClient({ bookings, rooms, today, role, adminName
             <form onSubmit={handleEdit} className="space-y-4">
               {/* Room */}
               <div>
-                <label className="label">ห้องพัก</label>
-                <select
-                  value={editForm.room_id}
-                  onChange={e => setEditForm(p => ({ ...p, room_id: e.target.value }))}
-                  className="input"
-                >
+                <label className="label">ห้องพัก (โยกห้องได้)</label>
+                <select value={editForm.room_id} onChange={e => setEdit('room_id', e.target.value)} className="input">
                   {rooms.map(r => (
                     <option key={r.id} value={r.id}>ห้อง {r.room_no} (อาคาร {r.building})</option>
                   ))}
                 </select>
                 {editForm.room_id !== editBooking.room_id && (
                   <p className="text-xs text-amber-600 mt-1">
-                    ⚠ จะบันทึกประวัติย้ายห้อง {editBooking.room?.room_no} → {rooms.find(r => r.id === editForm.room_id)?.room_no} ใน note อัตโนมัติ
+                    ⚠ จะบันทึกประวัติย้ายห้อง {editBooking.room?.room_no} → {selectedRoom?.room_no} ใน note อัตโนมัติ
                   </p>
                 )}
               </div>
@@ -322,31 +341,30 @@ export default function BookingsClient({ bookings, rooms, today, role, adminName
               {/* Dates */}
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div>
-                  <label className="label">วันเช็คอิน</label>
-                  <input
-                    type="date" value={editForm.checkin_date}
-                    onChange={e => setEditForm(p => ({ ...p, checkin_date: e.target.value }))}
-                    className="input"
-                  />
+                  <label className="label">วันเช็คอิน (โยกวันได้)</label>
+                  <input type="date" value={editForm.checkin_date}
+                    onChange={e => setEdit('checkin_date', e.target.value)} className="input" />
                 </div>
                 <div>
                   <label className="label">วันเช็คเอาท์</label>
-                  <input
-                    type="date" value={editForm.checkout_date}
-                    onChange={e => setEditForm(p => ({ ...p, checkout_date: e.target.value }))}
-                    className="input"
-                  />
+                  <input type="date" value={editForm.checkout_date}
+                    min={editForm.checkin_date}
+                    onChange={e => setEdit('checkout_date', e.target.value)} className="input" />
                 </div>
               </div>
+
+              {/* Conflict warning — แสดงทันทีเมื่อห้อง/วันชนกัน */}
+              {editConflict && (
+                <div className="bg-red-50 border border-red-200 rounded-lg px-3 py-2 text-sm text-red-700">
+                  ⚠ ห้อง {selectedRoom?.room_no} มีการจองของ <strong>{editConflict.customer?.full_name ?? 'ลูกค้าอื่น'}</strong> ทับอยู่ในช่วงวันนี้
+                  ({formatDate(editConflict.checkin_date)} – {formatDate(editConflict.checkout_date)})
+                </div>
+              )}
 
               {/* Channel */}
               <div>
                 <label className="label">ช่องทาง</label>
-                <select
-                  value={editForm.channel}
-                  onChange={e => setEditForm(p => ({ ...p, channel: e.target.value }))}
-                  className="input"
-                >
+                <select value={editForm.channel} onChange={e => setEdit('channel', e.target.value)} className="input">
                   {CHANNEL_OPTIONS.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
                 </select>
               </div>
@@ -355,32 +373,20 @@ export default function BookingsClient({ bookings, rooms, today, role, adminName
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div>
                   <label className="label">ราคารวม (บาท)</label>
-                  <input
-                    type="number" min="0" step="0.01"
-                    value={editForm.price}
-                    onChange={e => setEditForm(p => ({ ...p, price: e.target.value }))}
-                    className="input"
-                  />
+                  <input type="number" min="0" step="0.01" value={editForm.price}
+                    onChange={e => setEdit('price', e.target.value)} className="input" />
                 </div>
                 <div>
                   <label className="label">มัดจำ (บาท)</label>
-                  <input
-                    type="number" min="0" step="0.01"
-                    value={editForm.deposit}
-                    onChange={e => setEditForm(p => ({ ...p, deposit: e.target.value }))}
-                    className="input"
-                  />
+                  <input type="number" min="0" step="0.01" value={editForm.deposit}
+                    onChange={e => setEdit('deposit', e.target.value)} className="input" />
                 </div>
               </div>
 
               {/* Status */}
               <div>
                 <label className="label">สถานะ</label>
-                <select
-                  value={editForm.status}
-                  onChange={e => setEditForm(p => ({ ...p, status: e.target.value }))}
-                  className="input"
-                >
+                <select value={editForm.status} onChange={e => setEdit('status', e.target.value)} className="input">
                   {STATUS_OPTIONS.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
                 </select>
               </div>
@@ -388,13 +394,9 @@ export default function BookingsClient({ bookings, rooms, today, role, adminName
               {/* Note */}
               <div>
                 <label className="label">หมายเหตุ</label>
-                <textarea
-                  value={editForm.note}
-                  onChange={e => setEditForm(p => ({ ...p, note: e.target.value }))}
-                  className="input"
-                  rows={3}
-                  placeholder="หมายเหตุ (ประวัติย้ายห้องจะถูกเพิ่มอัตโนมัติ)"
-                />
+                <textarea value={editForm.note} onChange={e => setEdit('note', e.target.value)}
+                  className="input" rows={3}
+                  placeholder="หมายเหตุ (ประวัติย้ายห้องจะเพิ่มอัตโนมัติ)" />
               </div>
 
               {editError && (
@@ -405,9 +407,7 @@ export default function BookingsClient({ bookings, rooms, today, role, adminName
                 <button type="submit" disabled={editLoading} className="btn-primary flex-1 justify-center">
                   {editLoading ? 'กำลังบันทึก...' : 'บันทึกการแก้ไข'}
                 </button>
-                <button type="button" onClick={() => setEditBooking(null)} className="btn-secondary">
-                  ยกเลิก
-                </button>
+                <button type="button" onClick={() => setEditBooking(null)} className="btn-secondary">ยกเลิก</button>
               </div>
             </form>
           </div>
