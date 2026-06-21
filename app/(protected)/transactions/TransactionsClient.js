@@ -7,6 +7,7 @@ import DailyCloseButton from '@/components/DailyCloseButton'
 import ExportButtons from '@/components/ExportButtons'
 import { TxTypeBadge } from '@/components/RoomStatusBadge'
 import { deleteTransaction } from '@/app/actions/transactions'
+import { sellItem } from '@/app/actions/inventory'
 import { formatDate } from '@/lib/dateUtils'
 function formatCurrency(n) { return '฿' + Number(n || 0).toLocaleString('th-TH', { minimumFractionDigits: 2 }) }
 
@@ -20,13 +21,19 @@ const EXPORT_COLS = [
 
 export default function TransactionsClient({
   transactions, today, from, to,
-  todayIncome, todayExpense, alreadyClosed, closedDates,
+  todayIncome, todayExpense, alreadyClosed, closedDates, saleItems,
 }) {
   const router = useRouter()
   const [showForm, setShowForm] = useState(false)
   const [fromDate, setFromDate] = useState(from)
   const [toDate, setToDate] = useState(to)
   const [deletingId, setDeletingId] = useState(null)
+
+  // บันทึกขายของ
+  const [showSellForm, setShowSellForm] = useState(false)
+  const [sellForm, setSellForm] = useState({ item_id: '', quantity: '' })
+  const [sellLoading, setSellLoading] = useState(false)
+  const [sellError, setSellError] = useState('')
 
   function applyFilter() {
     router.push(`/transactions?dateFrom=${fromDate}&dateTo=${toDate}`)
@@ -39,6 +46,31 @@ export default function TransactionsClient({
     setDeletingId(null)
     if (result.error) alert(result.error)
     else router.refresh()
+  }
+
+  const selectedSaleItem = saleItems.find(i => i.id === sellForm.item_id)
+  const sellTotal = selectedSaleItem && Number(sellForm.quantity) > 0
+    ? Number(selectedSaleItem.sale_price) * Number(sellForm.quantity)
+    : null
+  const sellOverStock = selectedSaleItem && Number(sellForm.quantity) > 0
+    && Number(sellForm.quantity) > Number(selectedSaleItem.current_stock)
+
+  async function handleSell(e) {
+    e.preventDefault()
+    setSellError('')
+    if (!sellForm.item_id) { setSellError('กรุณาเลือกสินค้า'); return }
+    if (!sellForm.quantity || Number(sellForm.quantity) <= 0) { setSellError('กรุณากรอกจำนวน'); return }
+    if (sellOverStock) {
+      setSellError(`สต๊อกไม่พอ — มีอยู่ ${Number(selectedSaleItem.current_stock).toLocaleString('th-TH')} ${selectedSaleItem.unit}`)
+      return
+    }
+    setSellLoading(true)
+    const result = await sellItem({ item_id: sellForm.item_id, quantity: sellForm.quantity })
+    setSellLoading(false)
+    if (result.error) { setSellError(result.error); return }
+    setSellForm({ item_id: '', quantity: '' })
+    setShowSellForm(false)
+    router.refresh()
   }
 
   const totalIncome = transactions.filter(t => t.tx_type === 'income').reduce((s, t) => s + Number(t.amount), 0)
@@ -66,9 +98,16 @@ export default function TransactionsClient({
 
       {/* Actions row */}
       <div className="flex flex-wrap items-center gap-3">
-        <button onClick={() => setShowForm(!showForm)} className="btn-primary">
+        <button onClick={() => { setShowForm(!showForm); setShowSellForm(false) }} className="btn-primary">
           {showForm ? '✕ ปิดฟอร์ม' : '+ เพิ่มรายการ'}
         </button>
+        {saleItems.length > 0 && (
+          <button
+            onClick={() => { setShowSellForm(!showSellForm); setShowForm(false); setSellError(''); setSellForm({ item_id: '', quantity: '' }) }}
+            className="flex items-center gap-2 px-4 py-2 bg-purple-600 text-white text-sm font-medium rounded-lg hover:bg-purple-700 transition-colors">
+            {showSellForm ? '✕ ปิด' : '🛒 บันทึกขายของ'}
+          </button>
+        )}
         <DailyCloseButton
           date={today}
           alreadyClosed={alreadyClosed}
@@ -89,6 +128,57 @@ export default function TransactionsClient({
         <div className="card max-w-md">
           <h2 className="text-base font-semibold text-gray-900 mb-4">เพิ่มรายการ</h2>
           <TransactionForm onClose={() => setShowForm(false)} />
+        </div>
+      )}
+
+      {/* Sell form */}
+      {showSellForm && (
+        <div className="card max-w-md border-l-4 border-purple-500">
+          <h2 className="text-base font-semibold text-gray-900 mb-4">🛒 บันทึกขายของ</h2>
+          <form onSubmit={handleSell} className="space-y-3">
+            <div>
+              <label className="label">สินค้า *</label>
+              <select required value={sellForm.item_id}
+                onChange={e => setSellForm(p => ({ ...p, item_id: e.target.value, quantity: '' }))}
+                className="input">
+                <option value="">-- เลือกสินค้า --</option>
+                {saleItems.map(i => (
+                  <option key={i.id} value={i.id}>
+                    {i.name} — คงเหลือ {Number(i.current_stock).toLocaleString('th-TH')} {i.unit} — ฿{Number(i.sale_price).toLocaleString('th-TH')}/{i.unit}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <div>
+              <label className="label">จำนวนที่ขาย *</label>
+              <input type="number" required min="0.01" step="0.01"
+                value={sellForm.quantity}
+                onChange={e => setSellForm(p => ({ ...p, quantity: e.target.value }))}
+                className={`input ${sellOverStock ? 'border-red-400 bg-red-50' : ''}`}
+                placeholder="0" />
+              {sellOverStock && (
+                <p className="text-xs text-red-600 mt-1">
+                  ⚠ เกินสต๊อกที่มีอยู่ ({Number(selectedSaleItem.current_stock).toLocaleString('th-TH')} {selectedSaleItem.unit})
+                </p>
+              )}
+            </div>
+            {sellTotal !== null && !sellOverStock && (
+              <div className="bg-purple-50 border border-purple-200 rounded-lg px-3 py-2 flex justify-between items-center text-sm">
+                <span className="text-gray-600">ยอดรวม</span>
+                <span className="font-bold text-purple-700 text-base">
+                  ฿{sellTotal.toLocaleString('th-TH', { minimumFractionDigits: 2 })}
+                </span>
+              </div>
+            )}
+            {sellError && <p className="text-sm text-red-600 bg-red-50 px-3 py-2 rounded-lg">{sellError}</p>}
+            <div className="flex gap-3">
+              <button type="submit" disabled={sellLoading || sellOverStock || !sellForm.quantity}
+                className="btn-primary disabled:opacity-50">
+                {sellLoading ? 'กำลังบันทึก...' : '🛒 บันทึก'}
+              </button>
+              <button type="button" onClick={() => setShowSellForm(false)} className="btn-secondary">ยกเลิก</button>
+            </div>
+          </form>
         </div>
       )}
 

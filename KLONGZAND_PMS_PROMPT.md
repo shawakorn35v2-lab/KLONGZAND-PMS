@@ -69,7 +69,7 @@
 - รายชื่อลูกค้าทั้งหมด ค้นหาได้ด้วยชื่อ/เบอร์โทร
 - หน้ารายละเอียดลูกค้า แสดงประวัติการเข้าพักทั้งหมด (join จาก `bookings`)
 
-### `/transactions` (รายรับ-รายจ่ายประจำวัน)
+### `/transactions` (รายรับ-รายจ่ายประจำวัน + บันทึกขายของ)
 - ฟอร์มกรอกรายรับ/รายจ่ายเอง (เช่น ค่าน้ำไฟ ค่าซ่อมบำรุง ค่าใช้จ่ายอื่น ๆ) พร้อมหมวดหมู่
 - รายการของวันนี้ พร้อมยอดรวมรายรับ/รายจ่าย/กำไรสุทธิแบบ real-time
 - ปุ่ม **"ปิดยอดประจำวัน"** — กดได้หลัง 23:59 ของวันนั้น (หรือ admin กดเองได้ทุกเวลาเพื่อทดสอบ) — เมื่อกดแล้ว: สร้าง record ใน `daily_closings`, set `transactions.is_closed = true` สำหรับวันนั้นทั้งหมด และห้ามแก้ไข/ลบรายการของวันที่ปิดยอดแล้ว (ทั้ง backend ผ่าน RLS/policy logic และ disable ปุ่มแก้ไขใน UI)
@@ -109,7 +109,7 @@
 - ✅ `/dashboard` — สรุปยอดวันนี้/เดือนนี้, RoomGrid, กราฟ recharts, Export Excel/PDF, ภาพรวมสะสมทั้งหมด (all-time income/expense/net/booking count), Occupancy เรียลไทม์ (date-based: checkin_date ≤ today < checkout_date หรือ is_monthly room), Occupancy รายเดือน (dropdown เลือกเดือน, แสดงห้อง-คืน, คำนวณจาก bookings + monthly rooms ทุกวันในเดือน), กราฟอัตราเข้าพักรายเดือน 12 เดือน (BarChart)
 - ✅ `/bookings` — จอง/เช็คอิน/เช็คเอาท์, ตารางห้องว่าง 7 วัน, ค้นหาห้องว่างตามช่วงวันที่, อัปโหลดบัตรประชาชน/ทะเบียนรถ (Supabase Storage bucket `booking-documents`)
 - ✅ `/customers` — รายชื่อลูกค้า, ค้นหา, ประวัติการเข้าพัก
-- ✅ `/transactions` — รายรับ-รายจ่าย, ปิดยอดประจำวัน, Export
+- ✅ `/transactions` — รายรับ-รายจ่าย, ปิดยอดประจำวัน, Export, ปุ่ม "🛒 บันทึกขายของ" (เลือกสินค้าจาก is_for_sale=true, แสดงสต๊อก+ราคา, คำนวณยอดอัตโนมัติ, กันเกินสต๊อก, เรียก sellItem action เดิม — atomic transaction+movement, revalidate /inventory+/dashboard อัตโนมัติ)
 - ✅ `/housekeeping` — สถานะห้อง, เปลี่ยนสถานะ, log
 - ✅ `/rooms` — จัดการห้อง 19 ห้อง, toggle monthly
 - ✅ `/rooms/[id]/meter` — มิเตอร์ไฟ/ค่าน้ำ รายเดือน, Export PDF

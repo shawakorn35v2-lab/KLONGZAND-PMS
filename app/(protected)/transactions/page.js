@@ -14,6 +14,7 @@ export default async function TransactionsPage({ searchParams }) {
     { data: transactions },
     { data: todayClosed },
     { data: allClosings },
+    { data: saleItems },
   ] = await Promise.all([
     supabase
       .from('transactions')
@@ -31,6 +32,12 @@ export default async function TransactionsPage({ searchParams }) {
       .select('closing_date')
       .order('closing_date', { ascending: false })
       .limit(30),
+    supabase
+      .from('inventory_items')
+      .select('id, name, unit, current_stock, sale_price')
+      .eq('is_for_sale', true)
+      .eq('is_active', true)
+      .order('name'),
   ])
 
   const txs = transactions ?? []
@@ -53,6 +60,7 @@ export default async function TransactionsPage({ searchParams }) {
         todayExpense={todayExpense}
         alreadyClosed={!!todayClosed}
         closedDates={(allClosings ?? []).map(c => c.closing_date)}
+        saleItems={saleItems ?? []}
       />
     </div>
   )
