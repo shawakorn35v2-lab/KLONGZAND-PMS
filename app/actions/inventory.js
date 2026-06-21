@@ -2,6 +2,7 @@
 
 import { createClient } from '@/lib/supabase-server'
 import { revalidatePath } from 'next/cache'
+import { getTodayString } from '@/lib/dateUtils'
 
 export async function createInventoryItem({ name, unit, reorder_point }) {
   const supabase = await createClient()
@@ -13,6 +14,22 @@ export async function createInventoryItem({ name, unit, reorder_point }) {
   if (error) return { error: error.message }
   revalidatePath('/inventory')
   return { data }
+}
+
+export async function updateInventoryItem(id, { is_for_sale, sale_price }) {
+  const supabase = await createClient()
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) return { error: 'ไม่ได้เข้าสู่ระบบ' }
+  const { data: profile } = await supabase.from('profiles').select('role').eq('id', user.id).single()
+  if (profile?.role !== 'admin') return { error: 'เฉพาะแอดมินเท่านั้น' }
+
+  const { error } = await supabase.from('inventory_items').update({
+    is_for_sale: Boolean(is_for_sale),
+    sale_price: is_for_sale ? (Number(sale_price) || null) : null,
+  }).eq('id', id)
+  if (error) return { error: error.message }
+  revalidatePath('/inventory')
+  return {}
 }
 
 export async function addStockMovement({ item_id, movement_type, quantity, room_id, unit_cost, note }) {
@@ -39,6 +56,58 @@ export async function addStockMovement({ item_id, movement_type, quantity, room_
   })
   if (error) return { error: error.message }
   revalidatePath('/inventory')
+  return {}
+}
+
+export async function sellItem({ item_id, quantity, note }) {
+  const supabase = await createClient()
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) return { error: 'ไม่ได้เข้าสู่ระบบ' }
+
+  const { data: item, error: itemErr } = await supabase
+    .from('inventory_items')
+    .select('name, unit, current_stock, sale_price, is_for_sale')
+    .eq('id', item_id)
+    .single()
+  if (itemErr || !item) return { error: 'ไม่พบรายการสินค้า' }
+  if (!item.is_for_sale) return { error: 'รายการนี้ไม่ได้ตั้งเป็นสินค้าขาย' }
+  if (Number(quantity) > Number(item.current_stock)) {
+    return { error: `สต๊อกไม่พอ — มีอยู่ ${Number(item.current_stock).toLocaleString('th-TH')} ${item.unit}` }
+  }
+
+  const qty = Number(quantity)
+  const amount = Number(item.sale_price || 0) * qty
+  const txNote = note || `ขาย ${item.name} x${qty} ${item.unit}`
+
+  // Insert transaction first
+  const { data: tx, error: txErr } = await supabase.from('transactions').insert({
+    tx_date: getTodayString(),
+    tx_type: 'income',
+    category: 'ขายของ',
+    amount,
+    note: txNote,
+    created_by: user.id,
+  }).select('id').single()
+  if (txErr) return { error: txErr.message }
+
+  // Insert movement linked to transaction
+  const { error: mvErr } = await supabase.from('inventory_movements').insert({
+    item_id,
+    movement_type: 'sale',
+    quantity: qty,
+    note: txNote,
+    transaction_id: tx.id,
+    created_by: user.id,
+  })
+  if (mvErr) {
+    // Rollback: remove the transaction we just created
+    await supabase.from('transactions').delete().eq('id', tx.id)
+    return { error: mvErr.message }
+  }
+
+  revalidatePath('/inventory')
+  revalidatePath('/transactions')
+  revalidatePath('/dashboard')
   return {}
 }
 

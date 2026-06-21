@@ -113,7 +113,7 @@
 - ✅ `/housekeeping` — สถานะห้อง, เปลี่ยนสถานะ, log
 - ✅ `/rooms` — จัดการห้อง 19 ห้อง, toggle monthly
 - ✅ `/rooms/[id]/meter` — มิเตอร์ไฟ/ค่าน้ำ รายเดือน, Export PDF
-- ✅ `/inventory` — สต๊อกของใช้ (ไฮไลท์แดงเมื่อ current_stock < reorder_point), ปุ่ม "รับของเข้า" และ "เบิกของ" แยกชัดเจน (ทั้ง admin และ staff ทำได้), กันเบิกเกินสต๊อก (client + server validation), ประวัติ movements ใช้ lib/dateUtils.js, คำขอ inventory_requests (admin อนุมัติ/ปฏิเสธ)
+- ✅ `/inventory` — สต๊อกของใช้ (ไฮไลท์แดงเมื่อ current_stock < reorder_point), ปุ่ม "รับของเข้า" / "เบิกของ" / "ขายสินค้า" แยกชัดเจน (ทั้ง admin และ staff ทำได้), กันเบิก/ขายเกินสต๊อก (client + server validation), ฟีเจอร์ขายสินค้า (toggle is_for_sale + sale_price ต่อรายการ, ขายแล้วสร้าง transaction 'ขายของ' + movement 'sale' อัตโนมัติ, rollback ถ้า movement insert ล้มเหลว), ประวัติแสดง 3 ประเภท badge (📦 รับเข้า / 📤 เบิกออก / 🛒 ขาย), คำขอ inventory_requests (admin อนุมัติ/ปฏิเสธ)
 - ✅ Sidebar responsive, hamburger menu บนมือถือ
 - ✅ ทุกหน้า responsive (p-4 md:p-6, grid-cols-1 sm:grid-cols-X)
 - ✅ `lib/dateUtils.js` — utility กลาง: formatDate (DD/MM/พ.ศ.), formatMonth, formatShortDate, formatLongDate, formatDateTime (timestamp + เวลา ไทม์โซน Asia/Bangkok), getTodayString (local timezone safe)

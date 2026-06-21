@@ -19,7 +19,7 @@ export default async function InventoryPage() {
       .order('name'),
     supabase
       .from('inventory_movements')
-      .select('*, item:inventory_items(name, unit), room:rooms(room_no), creator:profiles!created_by(full_name)')
+      .select('*, item:inventory_items(name, unit), room:rooms(room_no), creator:profiles!created_by(full_name), tx:transactions(amount)')
       .order('created_at', { ascending: false })
       .limit(200),
     supabase
