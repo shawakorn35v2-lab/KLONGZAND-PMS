@@ -88,13 +88,12 @@ export default function InventoryClient({ items, movements, requests, rooms, rol
   // History filters
   const [histFilter, setHistFilter] = useState({ item_id: '', type: '' })
 
-  const supplyItems = items.filter(i => !i.is_for_sale)
   const saleItems = items.filter(i => i.is_for_sale)
   const lowStockItems = items.filter(i => Number(i.current_stock) < Number(i.reorder_point))
   const pendingCount = requests.filter(r => r.status === 'pending').length
 
   // Real-time validations
-  const selectedOutItem = supplyItems.find(i => i.id === outForm.item_id)
+  const selectedOutItem = items.find(i => i.id === outForm.item_id)
   const outOverStock = selectedOutItem && Number(outForm.quantity) > 0 && Number(outForm.quantity) > Number(selectedOutItem.current_stock)
   const sellOverStock = sellModal && Number(sellForm.quantity) > 0 && Number(sellForm.quantity) > Number(sellModal.current_stock)
 
@@ -360,10 +359,10 @@ export default function InventoryClient({ items, movements, requests, rooms, rol
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-100">
-                  {supplyItems.length === 0 && (
-                    <tr><td colSpan={6} className="text-center text-gray-400 py-8">ไม่มีรายการของใช้ภายใน</td></tr>
+                  {items.length === 0 && (
+                    <tr><td colSpan={6} className="text-center text-gray-400 py-8">ไม่มีรายการ</td></tr>
                   )}
-                  {supplyItems.map(item => {
+                  {items.map(item => {
                     const isLow = Number(item.current_stock) < Number(item.reorder_point)
                     return (
                       <tr key={item.id} className={`hover:bg-gray-50 ${isLow ? 'bg-red-50' : ''}`}>
@@ -423,7 +422,7 @@ export default function InventoryClient({ items, movements, requests, rooms, rol
                 <label className="label">รายการของใช้ *</label>
                 <select required value={inForm.item_id} onChange={e => setInForm(p => ({ ...p, item_id: e.target.value }))} className="input">
                   <option value="">-- เลือกรายการ --</option>
-                  {supplyItems.map(i => <option key={i.id} value={i.id}>{i.name} (คงเหลือ {formatNum(i.current_stock)} {i.unit})</option>)}
+                  {items.map(i => <option key={i.id} value={i.id}>{i.name} (คงเหลือ {formatNum(i.current_stock)} {i.unit})</option>)}
                 </select>
               </div>
               <div className="grid grid-cols-2 gap-3">
@@ -456,7 +455,7 @@ export default function InventoryClient({ items, movements, requests, rooms, rol
                 <label className="label">รายการของใช้ *</label>
                 <select required value={outForm.item_id} onChange={e => setOutForm(p => ({ ...p, item_id: e.target.value, quantity: '' }))} className="input">
                   <option value="">-- เลือกรายการ --</option>
-                  {supplyItems.map(i => <option key={i.id} value={i.id}>{i.name} (คงเหลือ {formatNum(i.current_stock)} {i.unit})</option>)}
+                  {items.map(i => <option key={i.id} value={i.id}>{i.name} (คงเหลือ {formatNum(i.current_stock)} {i.unit})</option>)}
                 </select>
               </div>
               <div>
