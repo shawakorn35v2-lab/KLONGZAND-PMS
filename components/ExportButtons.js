@@ -1,6 +1,7 @@
 'use client'
 
 import { useState } from 'react'
+import { formatDate, getTodayString } from '@/lib/dateUtils'
 
 // format คือ string-key เท่านั้น — ห้ามส่ง function เป็น prop จาก Server Component
 const FORMATTERS = {
@@ -51,7 +52,7 @@ export default function ExportButtons({ data, filename, columns, title }) {
       doc.setFontSize(14)
       doc.text(title || filename, 14, 16)
       doc.setFontSize(9)
-      doc.text(`Generated: ${new Date().toLocaleDateString('en-GB')}`, 14, 23)
+      doc.text(`วันที่: ${formatDate(getTodayString())}`, 14, 23)
 
       const head = [columns.map(c => c.header)]
       const body = data.map(row =>

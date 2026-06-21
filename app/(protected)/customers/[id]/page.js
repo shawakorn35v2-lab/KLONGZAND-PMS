@@ -3,8 +3,7 @@ import Link from 'next/link'
 import { createClient } from '@/lib/supabase-server'
 import { BookingStatusBadge, ChannelBadge } from '@/components/RoomStatusBadge'
 import CustomerEditForm from './CustomerEditForm'
-
-function formatDate(d) { return d ? new Date(d).toLocaleDateString('th-TH') : '' }
+import { formatDate } from '@/lib/dateUtils'
 function formatCurrency(n) { return '฿' + Number(n || 0).toLocaleString('th-TH', { minimumFractionDigits: 2 }) }
 
 export default async function CustomerDetailPage({ params }) {

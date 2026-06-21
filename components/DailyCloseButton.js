@@ -3,6 +3,7 @@
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { closeDailyTransactions } from '@/app/actions/transactions'
+import { formatLongDate } from '@/lib/dateUtils'
 
 export default function DailyCloseButton({ date, alreadyClosed, totalIncome, totalExpense }) {
   const router = useRouter()
@@ -29,7 +30,6 @@ export default function DailyCloseButton({ date, alreadyClosed, totalIncome, tot
   }
 
   const formatCurrency = (n) => '฿' + Number(n).toLocaleString('th-TH', { minimumFractionDigits: 2 })
-  const formatDate = (d) => new Date(d).toLocaleDateString('th-TH', { year: 'numeric', month: 'long', day: 'numeric' })
 
   return (
     <>
@@ -41,7 +41,7 @@ export default function DailyCloseButton({ date, alreadyClosed, totalIncome, tot
         <div className="fixed inset-0 bg-black/50 flex items-end sm:items-center justify-center z-50 p-0 sm:p-4">
           <div className="bg-white rounded-t-2xl sm:rounded-2xl shadow-2xl w-full sm:max-w-sm p-6">
             <h3 className="text-lg font-bold text-gray-900 mb-1">ยืนยันปิดยอด</h3>
-            <p className="text-sm text-gray-500 mb-4">วันที่ {formatDate(date)}</p>
+            <p className="text-sm text-gray-500 mb-4">วันที่ {formatLongDate(date)}</p>
 
             <div className="bg-gray-50 rounded-lg p-4 mb-4 space-y-2 text-sm">
               <div className="flex justify-between">

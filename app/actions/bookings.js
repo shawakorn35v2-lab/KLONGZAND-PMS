@@ -2,6 +2,7 @@
 
 import { revalidatePath } from 'next/cache'
 import { createClient } from '@/lib/supabase-server'
+import { getTodayString } from '@/lib/dateUtils'
 
 export async function createBooking({ roomId, customerId, newCustomer, channel, checkinDate, checkoutDate, price, deposit, note }) {
   const supabase = await createClient()
@@ -75,7 +76,7 @@ export async function checkinBooking(bookingId) {
   const remaining = Number(booking.price) - Number(booking.deposit)
   if (remaining > 0) {
     await supabase.from('transactions').insert({
-      tx_date: new Date().toISOString().split('T')[0],
+      tx_date: getTodayString(),
       tx_type: 'income',
       category: 'ค่าห้อง',
       amount: remaining,
@@ -155,7 +156,7 @@ export async function adminUpdateBooking(bookingId, fields, adminName, oldRoomNo
   let note = fields.note ?? ''
   if (roomChanged && oldRoomNo && newRoomNo) {
     const reasonPart = transferReason ? ` เหตุผล: ${transferReason}` : ''
-    const logLine = `ย้ายจากห้อง ${oldRoomNo} → ${newRoomNo} เมื่อ ${new Date().toLocaleDateString('th-TH')} โดย ${adminName}${reasonPart}`
+    const logLine = `ย้ายจากห้อง ${oldRoomNo} → ${newRoomNo} เมื่อ ${getTodayString()} โดย ${adminName}${reasonPart}`
     note = note ? `${note}\n${logLine}` : logLine
   }
 

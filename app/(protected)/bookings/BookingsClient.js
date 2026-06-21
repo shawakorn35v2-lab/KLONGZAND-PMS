@@ -5,8 +5,7 @@ import { useRouter } from 'next/navigation'
 import BookingForm from '@/components/BookingForm'
 import { BookingStatusBadge, ChannelBadge } from '@/components/RoomStatusBadge'
 import { checkinBooking, checkoutBooking, cancelBooking, adminUpdateBooking, adminDeleteBooking } from '@/app/actions/bookings'
-
-function formatDate(d) { return d ? new Date(d).toLocaleDateString('th-TH') : '' }
+import { formatDate, formatShortDate } from '@/lib/dateUtils'
 function formatCurrency(n) { return '฿' + Number(n || 0).toLocaleString('th-TH', { minimumFractionDigits: 2 }) }
 
 const STATUS_FILTERS = [
@@ -148,9 +147,9 @@ export default function BookingsClient({ bookings, rooms, today, role, adminName
 
   // Availability grid — คำนวณจาก bookings ที่รับมา (จะ re-render เมื่อ router.refresh ดึงข้อมูลใหม่)
   const days = Array.from({ length: 7 }, (_, i) => {
-    const d = new Date(today)
-    d.setDate(d.getDate() + i)
-    return d.toISOString().split('T')[0]
+    const [y, m, day] = today.split('-').map(Number)
+    const d = new Date(y, m - 1, day + i)
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
   })
 
   const occupiedSet = useMemo(() => {
@@ -196,7 +195,7 @@ export default function BookingsClient({ bookings, rooms, today, role, adminName
                 <th className="text-left px-2 py-1 text-gray-500 font-medium w-16">ห้อง</th>
                 {days.map(d => (
                   <th key={d} className="px-1 py-1 text-center text-gray-500 font-medium">
-                    {new Date(d).toLocaleDateString('th-TH', { month: 'short', day: 'numeric' })}
+                    {formatShortDate(d)}
                   </th>
                 ))}
               </tr>

@@ -4,6 +4,7 @@ import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import CustomerSearchInput from './CustomerSearchInput'
 import { createBooking } from '@/app/actions/bookings'
+import { getTodayString } from '@/lib/dateUtils'
 
 const CHANNEL_OPTIONS = [
   { value: 'walkin', label: 'Walk-in' },
@@ -25,7 +26,7 @@ function getAvailableRooms(rooms, bookings, checkin, checkout) {
 
 export default function BookingForm({ rooms, bookings, onClose }) {
   const router = useRouter()
-  const today = new Date().toISOString().split('T')[0]
+  const today = getTodayString()
 
   const [form, setForm] = useState({
     roomId: '',

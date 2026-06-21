@@ -1,10 +1,11 @@
 import { createClient } from '@/lib/supabase-server'
 import TransactionsClient from './TransactionsClient'
+import { getTodayString } from '@/lib/dateUtils'
 
 export default async function TransactionsPage({ searchParams }) {
   const { dateFrom, dateTo } = await searchParams ?? {}
   const supabase = await createClient()
-  const today = new Date().toISOString().split('T')[0]
+  const today = getTodayString()
 
   const from = dateFrom || today
   const to = dateTo || today

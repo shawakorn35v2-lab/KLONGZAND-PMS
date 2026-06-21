@@ -1,10 +1,11 @@
 import { createClient } from '@/lib/supabase-server'
 import BookingsClient from './BookingsClient'
+import { getTodayString } from '@/lib/dateUtils'
 
 export default async function BookingsPage() {
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
-  const today = new Date().toISOString().split('T')[0]
+  const today = getTodayString()
 
   const [
     { data: bookings },

@@ -7,8 +7,7 @@ import DailyCloseButton from '@/components/DailyCloseButton'
 import ExportButtons from '@/components/ExportButtons'
 import { TxTypeBadge } from '@/components/RoomStatusBadge'
 import { deleteTransaction } from '@/app/actions/transactions'
-
-function formatDate(d) { return d ? new Date(d).toLocaleDateString('th-TH') : '' }
+import { formatDate } from '@/lib/dateUtils'
 function formatCurrency(n) { return '฿' + Number(n || 0).toLocaleString('th-TH', { minimumFractionDigits: 2 }) }
 
 const EXPORT_COLS = [

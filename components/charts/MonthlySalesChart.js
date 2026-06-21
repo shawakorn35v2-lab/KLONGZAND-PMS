@@ -18,8 +18,8 @@ export default function MonthlySalesChart({ transactions }) {
 
   const data = months.map(m => {
     const monthTxs = (transactions ?? []).filter(t => {
-      const d = new Date(t.tx_date)
-      return d.getFullYear() === m.year && d.getMonth() === m.month
+      const [ty, tm] = t.tx_date.split('-').map(Number)
+      return ty === m.year && (tm - 1) === m.month
     })
     const income = monthTxs.filter(t => t.tx_type === 'income').reduce((s, t) => s + Number(t.amount), 0)
     const expense = monthTxs.filter(t => t.tx_type === 'expense').reduce((s, t) => s + Number(t.amount), 0)

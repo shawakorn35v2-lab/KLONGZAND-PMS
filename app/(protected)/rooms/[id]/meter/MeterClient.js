@@ -4,12 +4,10 @@ import { useState, useMemo } from 'react'
 import { useRouter } from 'next/navigation'
 import { saveMeterReading, deleteMeterReading, updateRoom } from '@/app/actions/rooms'
 
+import { formatMonth, formatDate, getTodayString } from '@/lib/dateUtils'
+
 function fmt(n) { return '฿' + Number(n || 0).toLocaleString('th-TH', { minimumFractionDigits: 2 }) }
 function fmtN(n) { return Number(n || 0).toLocaleString('th-TH', { minimumFractionDigits: 2 }) }
-function fmtMonth(dateStr) {
-  if (!dateStr) return ''
-  return new Date(dateStr).toLocaleDateString('th-TH', { year: 'numeric', month: 'long' })
-}
 
 export default function MeterClient({ readings, room }) {
   const router = useRouter()
@@ -91,7 +89,7 @@ export default function MeterClient({ readings, room }) {
   }
 
   async function handleDelete(r) {
-    if (!confirm(`ลบข้อมูลมิเตอร์รอบ ${fmtMonth(r.billing_month)}?`)) return
+    if (!confirm(`ลบข้อมูลมิเตอร์รอบ ${formatMonth(r.billing_month)}?`)) return
     setDeletingId(r.id)
     const result = await deleteMeterReading(r.id, room.id)
     setDeletingId(null)
@@ -122,8 +120,8 @@ export default function MeterClient({ readings, room }) {
 
       doc.setFontSize(10); doc.setFont('helvetica', 'normal')
       doc.text(`ห้อง ${room.room_no}  อาคาร ${room.building}`, 14, 41)
-      doc.text(`รอบบิล: ${fmtMonth(printRow.billing_month)}`, 14, 48)
-      doc.text(`วันที่พิมพ์: ${new Date().toLocaleDateString('th-TH')}`, pageW - 14, 48, { align: 'right' })
+      doc.text(`รอบบิล: ${formatMonth(printRow.billing_month)}`, 14, 48)
+      doc.text(`วันที่พิมพ์: ${formatDate(getTodayString())}`, pageW - 14, 48, { align: 'right' })
 
       const rows = []
       if (Number(rentVal) > 0)
@@ -207,7 +205,7 @@ export default function MeterClient({ readings, room }) {
             <tbody className="divide-y divide-gray-100">
               {readings.map(r => (
                 <tr key={r.id} className="hover:bg-gray-50">
-                  <td className="table-td font-medium">{fmtMonth(r.billing_month)}</td>
+                  <td className="table-td font-medium">{formatMonth(r.billing_month)}</td>
                   <td className="table-td text-right">{fmtN(r.prev_reading)}</td>
                   <td className="table-td text-right">{fmtN(r.curr_reading)}</td>
                   <td className="table-td text-right">{fmtN(r.curr_reading - r.prev_reading)}</td>
@@ -238,7 +236,7 @@ export default function MeterClient({ readings, room }) {
         <div className="fixed inset-0 bg-black/50 flex items-end sm:items-center justify-center z-50 p-0 sm:p-4">
           <div className="bg-white rounded-t-2xl sm:rounded-2xl shadow-2xl w-full sm:max-w-md p-6 max-h-[90vh] overflow-y-auto">
             <h3 className="text-base font-bold text-gray-900 mb-4">
-              แก้ไขมิเตอร์ — {fmtMonth(editRow.billing_month)}
+              แก้ไขมิเตอร์ — {formatMonth(editRow.billing_month)}
             </h3>
             <form onSubmit={handleEditSave} className="space-y-4">
               <div>
@@ -314,7 +312,7 @@ export default function MeterClient({ readings, room }) {
         <div className="fixed inset-0 bg-black/50 flex items-end sm:items-center justify-center z-50 p-0 sm:p-4">
           <div className="bg-white rounded-t-2xl sm:rounded-2xl shadow-2xl w-full sm:max-w-lg p-6 max-h-[90vh] overflow-y-auto">
             <h3 className="text-base font-bold text-gray-900 mb-1">ใบแจ้งหนี้ค่าเช่า</h3>
-            <p className="text-sm text-gray-500 mb-4">ห้อง {room.room_no} — {fmtMonth(printRow.billing_month)}</p>
+            <p className="text-sm text-gray-500 mb-4">ห้อง {room.room_no} — {formatMonth(printRow.billing_month)}</p>
 
             <div className="bg-gray-50 rounded-xl p-4 mb-4 space-y-2 text-sm">
               {Number(rentVal) > 0 && (

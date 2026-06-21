@@ -4,8 +4,7 @@ import { useState } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { createCustomer } from '@/app/actions/customers'
-
-function formatDate(d) { return d ? new Date(d).toLocaleDateString('th-TH') : '' }
+import { formatDate } from '@/lib/dateUtils'
 
 export default function CustomersClient({ customers: initialCustomers }) {
   const router = useRouter()

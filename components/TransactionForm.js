@@ -3,13 +3,14 @@
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { createTransaction } from '@/app/actions/transactions'
+import { getTodayString } from '@/lib/dateUtils'
 
 const INCOME_CATEGORIES = ['ค่าห้อง', 'ค่ามัดจำ', 'ค่าบริการ', 'อื่นๆ']
 const EXPENSE_CATEGORIES = ['ค่าสาธารณูปโภค', 'ซ่อมบำรุง', 'วัสดุ-อุปกรณ์', 'เงินเดือน', 'อื่นๆ']
 
 export default function TransactionForm({ onClose }) {
   const router = useRouter()
-  const today = new Date().toISOString().split('T')[0]
+  const today = getTodayString()
   const [form, setForm] = useState({
     tx_date: today,
     tx_type: 'income',

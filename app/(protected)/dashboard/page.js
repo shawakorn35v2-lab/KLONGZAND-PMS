@@ -3,6 +3,7 @@ import RoomGrid from '@/components/RoomGrid'
 import MonthlySalesChart from '@/components/charts/MonthlySalesChart'
 import ChannelChart from '@/components/charts/ChannelChart'
 import ExportButtons from '@/components/ExportButtons'
+import { getTodayString, formatLongDate } from '@/lib/dateUtils'
 
 function fmt(n) { return '฿' + Number(n || 0).toLocaleString('th-TH', { minimumFractionDigits: 2 }) }
 
@@ -24,9 +25,11 @@ function StatCard({ label, value, sub, color }) {
 
 export default async function DashboardPage() {
   const supabase = await createClient()
-  const today = new Date().toISOString().split('T')[0]
+  const today = getTodayString()
   const monthStart = today.slice(0, 7) + '-01'
-  const twelveMonthsAgo = new Date(new Date().setMonth(new Date().getMonth() - 11)).toISOString().split('T')[0].slice(0, 7) + '-01'
+  const now = new Date()
+  const agoDate = new Date(now.getFullYear(), now.getMonth() - 11, 1)
+  const twelveMonthsAgo = `${agoDate.getFullYear()}-${String(agoDate.getMonth() + 1).padStart(2, '0')}-01`
 
   const [
     { data: rooms },
@@ -69,7 +72,7 @@ export default async function DashboardPage() {
         <div>
           <h1 className="text-xl md:text-2xl font-bold text-gray-900">แดชบอร์ด</h1>
           <p className="text-sm text-gray-500 mt-0.5">
-            {new Date().toLocaleDateString('th-TH', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}
+            {formatLongDate(today)}
           </p>
         </div>
         <ExportButtons
