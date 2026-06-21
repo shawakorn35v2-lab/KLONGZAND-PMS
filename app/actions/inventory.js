@@ -18,6 +18,16 @@ export async function createInventoryItem({ name, unit, reorder_point }) {
 export async function addStockMovement({ item_id, movement_type, quantity, room_id, unit_cost, note }) {
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
+  if (!user) return { error: 'ไม่ได้เข้าสู่ระบบ' }
+
+  if (movement_type === 'stock_out') {
+    const { data: item } = await supabase
+      .from('inventory_items').select('current_stock, unit').eq('id', item_id).single()
+    if (item && Number(quantity) > Number(item.current_stock)) {
+      return { error: `สต๊อกไม่พอ — มีอยู่ ${Number(item.current_stock).toLocaleString('th-TH')} ${item.unit}` }
+    }
+  }
+
   const { error } = await supabase.from('inventory_movements').insert({
     item_id,
     movement_type,

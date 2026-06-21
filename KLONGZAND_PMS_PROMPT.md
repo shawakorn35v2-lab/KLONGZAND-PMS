@@ -103,16 +103,17 @@
 - ทุกหน้าต้อง build ผ่านด้วย `next build` ไม่มี error
 - UI ทั้งหมด responsive รองรับมือถือ (md: breakpoint สำหรับ sidebar)
 
-## 8. สถานะที่สร้างแล้ว (อัปเดต 2026-06-20)
+## 8. สถานะที่สร้างแล้ว (อัปเดต 2026-06-21)
 หน้าและฟีเจอร์ที่สร้างเสร็จแล้วในโปรเจกต์นี้:
 - ✅ `/login` — Supabase Auth login
 - ✅ `/dashboard` — สรุปยอด, RoomGrid, กราฟ recharts, Export Excel/PDF
-- ✅ `/bookings` — จอง/เช็คอิน/เช็คเอาท์, ตารางห้องว่าง 7 วัน
+- ✅ `/bookings` — จอง/เช็คอิน/เช็คเอาท์, ตารางห้องว่าง 7 วัน, ค้นหาห้องว่างตามช่วงวันที่, อัปโหลดบัตรประชาชน/ทะเบียนรถ (Supabase Storage bucket `booking-documents`)
 - ✅ `/customers` — รายชื่อลูกค้า, ค้นหา, ประวัติการเข้าพัก
 - ✅ `/transactions` — รายรับ-รายจ่าย, ปิดยอดประจำวัน, Export
 - ✅ `/housekeeping` — สถานะห้อง, เปลี่ยนสถานะ, log
 - ✅ `/rooms` — จัดการห้อง 19 ห้อง, toggle monthly
-- ✅ `/rooms/[id]/meter` — มิเตอร์ไฟ/ค่าน้ำ รายเดือน
-- ✅ `/inventory` — สต๊อกของใช้, รับเข้า/เบิกออก, คำขอ, ประวัติ
+- ✅ `/rooms/[id]/meter` — มิเตอร์ไฟ/ค่าน้ำ รายเดือน, Export PDF
+- ✅ `/inventory` — สต๊อกของใช้ (ไฮไลท์แดงเมื่อ current_stock < reorder_point), ปุ่ม "รับของเข้า" และ "เบิกของ" แยกชัดเจน (ทั้ง admin และ staff ทำได้), กันเบิกเกินสต๊อก (client + server validation), ประวัติ movements ใช้ lib/dateUtils.js, คำขอ inventory_requests (admin อนุมัติ/ปฏิเสธ)
 - ✅ Sidebar responsive, hamburger menu บนมือถือ
 - ✅ ทุกหน้า responsive (p-4 md:p-6, grid-cols-1 sm:grid-cols-X)
+- ✅ `lib/dateUtils.js` — utility กลาง: formatDate (DD/MM/พ.ศ.), formatMonth, formatShortDate, formatLongDate, formatDateTime (timestamp + เวลา ไทม์โซน Asia/Bangkok), getTodayString (local timezone safe)
