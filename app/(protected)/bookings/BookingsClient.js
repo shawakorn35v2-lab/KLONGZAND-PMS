@@ -6,6 +6,8 @@ import BookingForm from '@/components/BookingForm'
 import { BookingStatusBadge, ChannelBadge } from '@/components/RoomStatusBadge'
 import { checkinBooking, checkoutBooking, cancelBooking, adminUpdateBooking, adminDeleteBooking } from '@/app/actions/bookings'
 import { formatDate, formatShortDate } from '@/lib/dateUtils'
+import { createClient } from '@/lib/supabase-browser'
+
 function formatCurrency(n) { return '฿' + Number(n || 0).toLocaleString('th-TH', { minimumFractionDigits: 2 }) }
 
 const STATUS_FILTERS = [
@@ -30,7 +32,6 @@ const STATUS_OPTIONS = [
   { value: 'cancelled', label: 'ยกเลิก' },
 ]
 
-// หาห้องที่ว่างในช่วงวันที่ที่เลือก (ไม่นับ booking ปัจจุบันที่กำลังแก้ไข)
 function getConflictingBooking(bookings, roomId, checkin, checkout, excludeBookingId) {
   if (!roomId || !checkin || !checkout) return null
   return bookings.find(b =>
@@ -42,6 +43,22 @@ function getConflictingBooking(bookings, roomId, checkin, checkout, excludeBooki
   ) ?? null
 }
 
+async function uploadDoc(file) {
+  const supabase = createClient()
+  const ext = file.name.split('.').pop().toLowerCase()
+  const path = `docs/${Date.now()}-${Math.random().toString(36).slice(2)}.${ext}`
+  const { error } = await supabase.storage.from('booking-documents').upload(path, file)
+  if (error) throw new Error(`อัปโหลดล้มเหลว: ${error.message}`)
+  return path
+}
+
+async function getSignedUrl(path) {
+  if (!path) return null
+  const supabase = createClient()
+  const { data } = await supabase.storage.from('booking-documents').createSignedUrl(path, 3600)
+  return data?.signedUrl ?? null
+}
+
 export default function BookingsClient({ bookings, rooms, today, role, adminName }) {
   const router = useRouter()
   const isAdmin = role === 'admin'
@@ -50,6 +67,12 @@ export default function BookingsClient({ bookings, rooms, today, role, adminName
   const [statusFilter, setStatusFilter] = useState('')
   const [loadingId, setLoadingId] = useState(null)
 
+  // Room search
+  const [searchFrom, setSearchFrom] = useState('')
+  const [searchTo, setSearchTo] = useState('')
+  const [searchRoomId, setSearchRoomId] = useState('')
+  const [searchResults, setSearchResults] = useState(null)
+
   // Admin edit modal
   const [editBooking, setEditBooking] = useState(null)
   const [editForm, setEditForm] = useState({})
@@ -57,9 +80,13 @@ export default function BookingsClient({ bookings, rooms, today, role, adminName
   const [editLoading, setEditLoading] = useState(false)
   const [editError, setEditError] = useState('')
 
+  // Doc upload state for edit modal
+  const [docSignedUrls, setDocSignedUrls] = useState({ idCard: null, vehicleReg: null })
+  const [docFiles, setDocFiles] = useState({ idCard: null, vehicleReg: null })
+  const [docPreviews, setDocPreviews] = useState({ idCard: null, vehicleReg: null })
+
   const filtered = bookings.filter(b => !statusFilter || b.status === statusFilter)
 
-  // Conflict detection: ห้องว่างไหมในช่วงที่แก้ไข
   const editConflict = useMemo(() =>
     editBooking
       ? getConflictingBooking(bookings, editForm.room_id, editForm.checkin_date, editForm.checkout_date, editBooking.id)
@@ -67,7 +94,24 @@ export default function BookingsClient({ bookings, rooms, today, role, adminName
     [bookings, editForm.room_id, editForm.checkin_date, editForm.checkout_date, editBooking]
   )
 
-  function openEdit(b) {
+  function handleSearch() {
+    if (!searchFrom || !searchTo) return
+    const targetRooms = searchRoomId
+      ? rooms.filter(r => r.id === searchRoomId)
+      : rooms.filter(r => !r.is_monthly)
+    const results = targetRooms.map(room => {
+      const conflicts = bookings.filter(b =>
+        b.room_id === room.id &&
+        b.status !== 'cancelled' &&
+        b.checkin_date < searchTo &&
+        b.checkout_date > searchFrom
+      )
+      return { room, available: conflicts.length === 0, conflicts }
+    })
+    setSearchResults(results)
+  }
+
+  async function openEdit(b) {
     setEditBooking(b)
     setEditForm({
       room_id: b.room_id,
@@ -78,13 +122,37 @@ export default function BookingsClient({ bookings, rooms, today, role, adminName
       deposit: b.deposit ?? 0,
       status: b.status,
       note: b.note ?? '',
+      id_card_url: b.id_card_url ?? null,
+      vehicle_reg_url: b.vehicle_reg_url ?? null,
     })
     setTransferReason('')
     setEditError('')
+    setDocFiles({ idCard: null, vehicleReg: null })
+    setDocPreviews({ idCard: null, vehicleReg: null })
+    setDocSignedUrls({ idCard: null, vehicleReg: null })
+
+    const [idCardUrl, vehicleRegUrl] = await Promise.all([
+      getSignedUrl(b.id_card_url),
+      getSignedUrl(b.vehicle_reg_url),
+    ])
+    setDocSignedUrls({ idCard: idCardUrl, vehicleReg: vehicleRegUrl })
   }
 
   function setEdit(field, value) {
     setEditForm(p => ({ ...p, [field]: value }))
+  }
+
+  function handleDocFile(field, file) {
+    if (!file) return
+    setDocFiles(p => ({ ...p, [field]: file }))
+    setDocPreviews(p => ({ ...p, [field]: URL.createObjectURL(file) }))
+  }
+
+  function clearEditDoc(field) {
+    setDocFiles(p => ({ ...p, [field]: null }))
+    setDocPreviews(p => ({ ...p, [field]: null }))
+    setDocSignedUrls(p => ({ ...p, [field === 'idCard' ? 'idCard' : 'vehicleReg']: null }))
+    setEdit(field === 'idCard' ? 'id_card_url' : 'vehicle_reg_url', null)
   }
 
   async function handleAction(action, id) {
@@ -120,16 +188,26 @@ export default function BookingsClient({ bookings, rooms, today, role, adminName
     const newRoomNo = newRoom?.room_no
 
     setEditLoading(true)
-    const result = await adminUpdateBooking(
-      editBooking.id, editForm, adminName,
-      oldRoomNo, newRoomNo,
-      editBooking.room_id,
-      transferReason
-    )
-    setEditLoading(false)
-    if (result?.error) { setEditError(result.error); return }
-    setEditBooking(null)
-    router.refresh()
+    setEditError('')
+    try {
+      let idCardUrl = editForm.id_card_url
+      let vehicleRegUrl = editForm.vehicle_reg_url
+      if (docFiles.idCard) idCardUrl = await uploadDoc(docFiles.idCard)
+      if (docFiles.vehicleReg) vehicleRegUrl = await uploadDoc(docFiles.vehicleReg)
+
+      const result = await adminUpdateBooking(
+        editBooking.id,
+        { ...editForm, id_card_url: idCardUrl, vehicle_reg_url: vehicleRegUrl },
+        adminName, oldRoomNo, newRoomNo, editBooking.room_id, transferReason
+      )
+      if (result?.error) { setEditError(result.error); return }
+      setEditBooking(null)
+      router.refresh()
+    } catch (err) {
+      setEditError(err.message)
+    } finally {
+      setEditLoading(false)
+    }
   }
 
   async function handleDelete(b) {
@@ -145,7 +223,7 @@ export default function BookingsClient({ bookings, rooms, today, role, adminName
     else router.refresh()
   }
 
-  // Availability grid — คำนวณจาก bookings ที่รับมา (จะ re-render เมื่อ router.refresh ดึงข้อมูลใหม่)
+  // Availability grid
   const days = Array.from({ length: 7 }, (_, i) => {
     const [y, m, day] = today.split('-').map(Number)
     const d = new Date(y, m - 1, day + i)
@@ -182,6 +260,74 @@ export default function BookingsClient({ bookings, rooms, today, role, adminName
           <BookingForm rooms={rooms} bookings={bookings} onClose={() => setShowForm(false)} />
         </div>
       )}
+
+      {/* Room availability search */}
+      <div className="card">
+        <h2 className="text-base font-semibold text-gray-900 mb-3">ค้นหาห้องว่างตามช่วงวันที่</h2>
+        <div className="flex flex-wrap gap-3 items-end">
+          <div>
+            <label className="label">เช็คอิน</label>
+            <input type="date" value={searchFrom} onChange={e => { setSearchFrom(e.target.value); setSearchResults(null) }} className="input" />
+          </div>
+          <div>
+            <label className="label">เช็คเอาท์</label>
+            <input type="date" value={searchTo} min={searchFrom} onChange={e => { setSearchTo(e.target.value); setSearchResults(null) }} className="input" />
+          </div>
+          <div>
+            <label className="label">ห้อง (ไม่บังคับ)</label>
+            <select value={searchRoomId} onChange={e => { setSearchRoomId(e.target.value); setSearchResults(null) }} className="input">
+              <option value="">ทุกห้อง</option>
+              {rooms.filter(r => !r.is_monthly).map(r => (
+                <option key={r.id} value={r.id}>ห้อง {r.room_no}</option>
+              ))}
+            </select>
+          </div>
+          <button
+            onClick={handleSearch}
+            disabled={!searchFrom || !searchTo || searchTo <= searchFrom}
+            className="btn-primary disabled:opacity-50"
+          >
+            ค้นหา
+          </button>
+        </div>
+
+        {searchResults && (
+          <div className="mt-4 overflow-x-auto">
+            <table className="text-sm w-full">
+              <thead>
+                <tr className="border-b border-gray-200">
+                  <th className="text-left py-2 px-3 text-gray-500 font-medium">ห้อง</th>
+                  <th className="text-left py-2 px-3 text-gray-500 font-medium">อาคาร</th>
+                  <th className="text-left py-2 px-3 text-gray-500 font-medium">สถานะ</th>
+                  <th className="text-left py-2 px-3 text-gray-500 font-medium">การจองที่ทับ</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-gray-100">
+                {searchResults.map(({ room, available, conflicts }) => (
+                  <tr key={room.id}>
+                    <td className="py-2 px-3 font-semibold text-gray-800">{room.room_no}</td>
+                    <td className="py-2 px-3 text-gray-600">{room.building}</td>
+                    <td className="py-2 px-3">
+                      {available
+                        ? <span className="text-green-700 font-medium">○ ว่าง</span>
+                        : <span className="text-red-700 font-medium">● ไม่ว่าง</span>
+                      }
+                    </td>
+                    <td className="py-2 px-3 text-xs text-gray-500">
+                      {conflicts.map(c =>
+                        `${c.customer?.full_name ?? '?'} (${formatDate(c.checkin_date)} – ${formatDate(c.checkout_date)})`
+                      ).join(', ')}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+            <p className="text-xs text-gray-400 mt-2">
+              ว่าง {searchResults.filter(r => r.available).length} ห้อง / ไม่ว่าง {searchResults.filter(r => !r.available).length} ห้อง
+            </p>
+          </div>
+        )}
+      </div>
 
       {/* Availability grid */}
       <div className="card p-0 overflow-hidden">
@@ -306,6 +452,9 @@ export default function BookingsClient({ bookings, rooms, today, role, adminName
                         </>
                       )}
                       {b.note && <span title={b.note} className="text-gray-400 cursor-help">📝</span>}
+                      {(b.id_card_url || b.vehicle_reg_url) && (
+                        <span title="มีเอกสารแนบ" className="text-blue-400 cursor-help">📎</span>
+                      )}
                     </div>
                   </td>
                 </tr>
@@ -371,7 +520,7 @@ export default function BookingsClient({ bookings, rooms, today, role, adminName
                 </div>
               </div>
 
-              {/* Conflict warning — แสดงทันทีเมื่อห้อง/วันชนกัน */}
+              {/* Conflict warning */}
               {editConflict && (
                 <div className="bg-red-50 border border-red-200 rounded-lg px-3 py-2 text-sm text-red-700">
                   ⚠ ห้อง {selectedRoom?.room_no} มีการจองของ <strong>{editConflict.customer?.full_name ?? 'ลูกค้าอื่น'}</strong> ทับอยู่ในช่วงวันนี้
@@ -417,6 +566,29 @@ export default function BookingsClient({ bookings, rooms, today, role, adminName
                   placeholder="หมายเหตุ (ประวัติย้ายห้องจะเพิ่มอัตโนมัติ)" />
               </div>
 
+              {/* Documents */}
+              <div>
+                <label className="label">เอกสาร</label>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <EditDocField
+                    label="รูปบัตรประชาชน"
+                    signedUrl={docSignedUrls.idCard}
+                    localPreview={docPreviews.idCard}
+                    hasStored={!!editForm.id_card_url}
+                    onChange={f => handleDocFile('idCard', f)}
+                    onClear={() => clearEditDoc('idCard')}
+                  />
+                  <EditDocField
+                    label="รูปทะเบียนรถ"
+                    signedUrl={docSignedUrls.vehicleReg}
+                    localPreview={docPreviews.vehicleReg}
+                    hasStored={!!editForm.vehicle_reg_url}
+                    onChange={f => handleDocFile('vehicleReg', f)}
+                    onClear={() => clearEditDoc('vehicleReg')}
+                  />
+                </div>
+              </div>
+
               {editError && (
                 <p className="text-sm text-red-600 bg-red-50 px-3 py-2 rounded-lg">{editError}</p>
               )}
@@ -430,6 +602,40 @@ export default function BookingsClient({ bookings, rooms, today, role, adminName
             </form>
           </div>
         </div>
+      )}
+    </div>
+  )
+}
+
+function EditDocField({ label, signedUrl, localPreview, hasStored, onChange, onClear }) {
+  const displayUrl = localPreview || signedUrl
+
+  return (
+    <div>
+      <p className="text-xs text-gray-500 mb-1">{label}</p>
+      {displayUrl ? (
+        <div className="relative">
+          <a href={displayUrl} target="_blank" rel="noopener noreferrer">
+            <img src={displayUrl} alt={label} className="w-full h-28 object-cover rounded-lg border border-gray-200 cursor-pointer hover:opacity-90" />
+          </a>
+          <button type="button" onClick={onClear}
+            className="absolute top-1 right-1 bg-red-600 text-white rounded-full w-6 h-6 text-xs leading-none flex items-center justify-center shadow">
+            ✕
+          </button>
+          <label className="absolute bottom-1 right-1 bg-white/80 text-xs text-blue-700 px-2 py-0.5 rounded cursor-pointer">
+            เปลี่ยน
+            <input type="file" accept="image/*,application/pdf" className="hidden"
+              onChange={e => onChange(e.target.files?.[0] ?? null)} />
+          </label>
+        </div>
+      ) : hasStored ? (
+        <div className="flex items-center gap-2 text-xs text-gray-500 border border-gray-200 rounded-lg p-2">
+          <span>กำลังโหลด...</span>
+        </div>
+      ) : (
+        <input type="file" accept="image/*,application/pdf"
+          onChange={e => onChange(e.target.files?.[0] ?? null)}
+          className="block w-full text-sm text-gray-500 file:mr-3 file:py-1.5 file:px-3 file:rounded file:border-0 file:text-xs file:font-medium file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100 cursor-pointer border border-gray-200 rounded-lg p-1" />
       )}
     </div>
   )

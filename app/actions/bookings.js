@@ -4,7 +4,7 @@ import { revalidatePath } from 'next/cache'
 import { createClient } from '@/lib/supabase-server'
 import { getTodayString } from '@/lib/dateUtils'
 
-export async function createBooking({ roomId, customerId, newCustomer, channel, checkinDate, checkoutDate, price, deposit, note }) {
+export async function createBooking({ roomId, customerId, newCustomer, channel, checkinDate, checkoutDate, price, deposit, note, idCardUrl, vehicleRegUrl }) {
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) return { error: 'ไม่ได้เข้าสู่ระบบ' }
@@ -31,6 +31,8 @@ export async function createBooking({ roomId, customerId, newCustomer, channel, 
       price: Number(price),
       deposit: Number(deposit) || 0,
       note,
+      id_card_url: idCardUrl || null,
+      vehicle_reg_url: vehicleRegUrl || null,
       created_by: user.id,
     })
     .select('id')
@@ -169,6 +171,8 @@ export async function adminUpdateBooking(bookingId, fields, adminName, oldRoomNo
     deposit: Number(fields.deposit) || 0,
     status: fields.status,
     note: note || null,
+    id_card_url: fields.id_card_url ?? null,
+    vehicle_reg_url: fields.vehicle_reg_url ?? null,
   }).eq('id', bookingId)
 
   if (error) return { error: error.message }

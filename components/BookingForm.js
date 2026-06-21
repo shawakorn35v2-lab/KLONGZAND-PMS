@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation'
 import CustomerSearchInput from './CustomerSearchInput'
 import { createBooking } from '@/app/actions/bookings'
 import { getTodayString } from '@/lib/dateUtils'
+import { createClient } from '@/lib/supabase-browser'
 
 const CHANNEL_OPTIONS = [
   { value: 'walkin', label: 'Walk-in' },
@@ -24,6 +25,15 @@ function getAvailableRooms(rooms, bookings, checkin, checkout) {
   return rooms.filter(r => r.is_active && !r.is_monthly && !occupied.has(r.id))
 }
 
+async function uploadDoc(file) {
+  const supabase = createClient()
+  const ext = file.name.split('.').pop().toLowerCase()
+  const path = `docs/${Date.now()}-${Math.random().toString(36).slice(2)}.${ext}`
+  const { error } = await supabase.storage.from('booking-documents').upload(path, file)
+  if (error) throw new Error(`อัปโหลดล้มเหลว: ${error.message}`)
+  return path
+}
+
 export default function BookingForm({ rooms, bookings, onClose }) {
   const router = useRouter()
   const today = getTodayString()
@@ -38,6 +48,8 @@ export default function BookingForm({ rooms, bookings, onClose }) {
     note: '',
   })
   const [customerData, setCustomerData] = useState({ existingId: null, newCustomer: null })
+  const [docFiles, setDocFiles] = useState({ idCard: null, vehicleReg: null })
+  const [docPreviews, setDocPreviews] = useState({ idCard: null, vehicleReg: null })
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
 
@@ -45,6 +57,17 @@ export default function BookingForm({ rooms, bookings, onClose }) {
 
   function set(field, value) {
     setForm(prev => ({ ...prev, [field]: value }))
+  }
+
+  function handleDocFile(field, file) {
+    if (!file) return
+    setDocFiles(p => ({ ...p, [field]: file }))
+    setDocPreviews(p => ({ ...p, [field]: URL.createObjectURL(file) }))
+  }
+
+  function clearDoc(field) {
+    setDocFiles(p => ({ ...p, [field]: null }))
+    setDocPreviews(p => ({ ...p, [field]: null }))
   }
 
   async function handleSubmit(e) {
@@ -60,21 +83,31 @@ export default function BookingForm({ rooms, bookings, onClose }) {
       return
     }
     setLoading(true)
-    const result = await createBooking({
-      roomId: form.roomId,
-      customerId: customerData.existingId,
-      newCustomer: customerData.newCustomer,
-      channel: form.channel,
-      checkinDate: form.checkinDate,
-      checkoutDate: form.checkoutDate,
-      price: form.price || 0,
-      deposit: form.deposit || 0,
-      note: form.note,
-    })
-    setLoading(false)
-    if (result.error) { setError(result.error); return }
-    router.refresh()
-    onClose?.()
+    try {
+      const idCardUrl = docFiles.idCard ? await uploadDoc(docFiles.idCard) : null
+      const vehicleRegUrl = docFiles.vehicleReg ? await uploadDoc(docFiles.vehicleReg) : null
+
+      const result = await createBooking({
+        roomId: form.roomId,
+        customerId: customerData.existingId,
+        newCustomer: customerData.newCustomer,
+        channel: form.channel,
+        checkinDate: form.checkinDate,
+        checkoutDate: form.checkoutDate,
+        price: form.price || 0,
+        deposit: form.deposit || 0,
+        note: form.note,
+        idCardUrl,
+        vehicleRegUrl,
+      })
+      if (result.error) { setError(result.error); return }
+      router.refresh()
+      onClose?.()
+    } catch (err) {
+      setError(err.message)
+    } finally {
+      setLoading(false)
+    }
   }
 
   return (
@@ -133,6 +166,14 @@ export default function BookingForm({ rooms, bookings, onClose }) {
         <textarea value={form.note} onChange={e => set('note', e.target.value)} className="input" rows={2} placeholder="หมายเหตุเพิ่มเติม" />
       </div>
 
+      {/* Document upload */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+        <DocUpload label="รูปบัตรประชาชน (ไม่บังคับ)" preview={docPreviews.idCard}
+          onChange={f => handleDocFile('idCard', f)} onClear={() => clearDoc('idCard')} />
+        <DocUpload label="รูปทะเบียนรถ (ไม่บังคับ)" preview={docPreviews.vehicleReg}
+          onChange={f => handleDocFile('vehicleReg', f)} onClear={() => clearDoc('vehicleReg')} />
+      </div>
+
       {error && <p className="text-sm text-red-600 bg-red-50 px-3 py-2 rounded-lg">{error}</p>}
 
       <div className="flex gap-3 pt-2">
@@ -144,5 +185,28 @@ export default function BookingForm({ rooms, bookings, onClose }) {
         )}
       </div>
     </form>
+  )
+}
+
+function DocUpload({ label, preview, onChange, onClear }) {
+  return (
+    <div>
+      <label className="label">{label}</label>
+      {preview ? (
+        <div className="relative">
+          <a href={preview} target="_blank" rel="noopener noreferrer">
+            <img src={preview} alt={label} className="w-full h-32 object-cover rounded-lg border border-gray-200 cursor-pointer hover:opacity-90" />
+          </a>
+          <button type="button" onClick={onClear}
+            className="absolute top-1 right-1 bg-red-600 text-white rounded-full w-6 h-6 text-xs leading-none flex items-center justify-center shadow">
+            ✕
+          </button>
+        </div>
+      ) : (
+        <input type="file" accept="image/*,application/pdf"
+          onChange={e => onChange(e.target.files?.[0] ?? null)}
+          className="block w-full text-sm text-gray-500 file:mr-3 file:py-1.5 file:px-3 file:rounded file:border-0 file:text-xs file:font-medium file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100 cursor-pointer border border-gray-200 rounded-lg p-1" />
+      )}
+    </div>
   )
 }
