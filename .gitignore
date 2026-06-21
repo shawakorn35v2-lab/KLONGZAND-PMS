@@ -16,3 +16,8 @@ npm-debug.log*
 # misc
 .DS_Store
 *.pem
+
+# Office temp/lock files and exports
+~$*
+*.xlsx
+*.xls
