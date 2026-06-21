@@ -6,14 +6,42 @@ import { getTodayString } from '@/lib/dateUtils'
 
 export async function createSaleItem({ name, unit, sale_price }) {
   const supabase = await createClient()
+  const trimmedName = name.trim()
+
+  // Check for existing item with same name (case-insensitive)
+  const { data: existing } = await supabase
+    .from('inventory_items')
+    .select('id, name, is_for_sale, current_stock, unit')
+    .ilike('name', trimmedName)
+    .maybeSingle()
+
+  if (existing) {
+    if (existing.is_for_sale) {
+      return { error: 'สินค้านี้เป็นสินค้าขายอยู่แล้ว' }
+    }
+    // Exists but not yet a sale item — ask user to confirm conversion
+    return { existingItem: existing }
+  }
+
   const { data, error } = await supabase
     .from('inventory_items')
-    .insert({ name, unit, reorder_point: 0, is_for_sale: true, sale_price: Number(sale_price) })
+    .insert({ name: trimmedName, unit, reorder_point: 0, is_for_sale: true, sale_price: Number(sale_price) })
     .select()
     .single()
   if (error) return { error: error.message }
   revalidatePath('/inventory')
   return { data }
+}
+
+export async function convertToSaleItem(id, sale_price) {
+  const supabase = await createClient()
+  const { error } = await supabase
+    .from('inventory_items')
+    .update({ is_for_sale: true, sale_price: Number(sale_price) })
+    .eq('id', id)
+  if (error) return { error: error.message }
+  revalidatePath('/inventory')
+  return {}
 }
 
 export async function createInventoryItem({ name, unit, reorder_point }) {

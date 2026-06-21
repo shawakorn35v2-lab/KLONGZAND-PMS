@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation'
 import {
   addStockMovement, createInventoryRequest, updateRequestStatus,
   createInventoryItem, seedCommonAreaItems, updateInventoryItem, sellItem,
-  createSaleItem,
+  createSaleItem, convertToSaleItem,
 } from '@/app/actions/inventory'
 import { formatDateTime } from '@/lib/dateUtils'
 
@@ -65,6 +65,10 @@ export default function InventoryClient({ items, movements, requests, rooms, rol
   const [saleItemForm, setSaleItemForm] = useState({ name: '', unit: 'ชิ้น', sale_price: '' })
   const [saleItemLoading, setSaleItemLoading] = useState(false)
   const [saleItemError, setSaleItemError] = useState('')
+
+  // Confirm convert existing item to sale item
+  const [confirmConvertModal, setConfirmConvertModal] = useState(null)
+  const [confirmConvertLoading, setConfirmConvertLoading] = useState(false)
 
   // Stock-in form
   const [inForm, setInForm] = useState({ item_id: '', quantity: '', unit_cost: '', note: '' })
@@ -207,7 +211,23 @@ export default function InventoryClient({ items, movements, requests, rooms, rol
     setSaleItemLoading(true)
     const result = await createSaleItem(saleItemForm)
     setSaleItemLoading(false)
+    if (result.existingItem) {
+      // Existing non-sale item found — ask user to confirm conversion
+      setConfirmConvertModal({ item: result.existingItem, sale_price: saleItemForm.sale_price })
+      return
+    }
     if (result.error) { setSaleItemError(result.error); return }
+    setSaleItemForm({ name: '', unit: 'ชิ้น', sale_price: '' })
+    setShowSaleItemForm(false)
+    router.refresh()
+  }
+
+  async function handleConfirmConvert() {
+    setConfirmConvertLoading(true)
+    const result = await convertToSaleItem(confirmConvertModal.item.id, confirmConvertModal.sale_price)
+    setConfirmConvertLoading(false)
+    if (result.error) { setSaleItemError(result.error); setConfirmConvertModal(null); return }
+    setConfirmConvertModal(null)
     setSaleItemForm({ name: '', unit: 'ชิ้น', sale_price: '' })
     setShowSaleItemForm(false)
     router.refresh()
@@ -764,6 +784,29 @@ export default function InventoryClient({ items, movements, requests, rooms, rol
                 <button type="button" onClick={() => setSaleStockInModal(null)} className="btn-secondary">ยกเลิก</button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* ── MODAL: ยืนยันแปลงสินค้าเดิมเป็นสินค้าขาย ── */}
+      {confirmConvertModal && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-sm p-6">
+            <h3 className="text-base font-bold text-gray-900 mb-2">มีสินค้าชื่อนี้อยู่แล้ว</h3>
+            <p className="text-sm text-gray-600 mb-1">
+              พบ <span className="font-semibold">"{confirmConvertModal.item.name}"</span> ในระบบแล้ว
+              (สต๊อกปัจจุบัน {formatNum(confirmConvertModal.item.current_stock)} {confirmConvertModal.item.unit})
+            </p>
+            <p className="text-sm text-gray-600 mb-5">
+              ต้องการตั้งให้ของเดิมนี้เป็นสินค้าขายได้ที่ราคา <span className="font-semibold text-purple-700">{fmtMoney(confirmConvertModal.sale_price)}</span> ไหม?
+            </p>
+            <div className="flex gap-3">
+              <button onClick={handleConfirmConvert} disabled={confirmConvertLoading}
+                className="flex-1 py-2.5 bg-purple-600 text-white text-sm font-medium rounded-lg hover:bg-purple-700 disabled:opacity-50 transition-colors">
+                {confirmConvertLoading ? 'กำลังบันทึก...' : 'ใช่ ตั้งเป็นสินค้าขาย'}
+              </button>
+              <button onClick={() => setConfirmConvertModal(null)} className="btn-secondary">ยกเลิก</button>
+            </div>
           </div>
         </div>
       )}
