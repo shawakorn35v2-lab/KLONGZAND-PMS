@@ -106,7 +106,7 @@
 ## 8. สถานะที่สร้างแล้ว (อัปเดต 2026-06-21)
 หน้าและฟีเจอร์ที่สร้างเสร็จแล้วในโปรเจกต์นี้:
 - ✅ `/login` — Supabase Auth login
-- ✅ `/dashboard` — สรุปยอด, RoomGrid, กราฟ recharts, Export Excel/PDF
+- ✅ `/dashboard` — สรุปยอดวันนี้/เดือนนี้, RoomGrid, กราฟ recharts, Export Excel/PDF, ภาพรวมสะสมทั้งหมด (all-time income/expense/net/booking count), Occupancy เรียลไทม์ (date-based: checkin_date ≤ today < checkout_date หรือ is_monthly room), Occupancy รายเดือน (dropdown เลือกเดือน, แสดงห้อง-คืน, คำนวณจาก bookings + monthly rooms ทุกวันในเดือน), กราฟอัตราเข้าพักรายเดือน 12 เดือน (BarChart)
 - ✅ `/bookings` — จอง/เช็คอิน/เช็คเอาท์, ตารางห้องว่าง 7 วัน, ค้นหาห้องว่างตามช่วงวันที่, อัปโหลดบัตรประชาชน/ทะเบียนรถ (Supabase Storage bucket `booking-documents`)
 - ✅ `/customers` — รายชื่อลูกค้า, ค้นหา, ประวัติการเข้าพัก
 - ✅ `/transactions` — รายรับ-รายจ่าย, ปิดยอดประจำวัน, Export
