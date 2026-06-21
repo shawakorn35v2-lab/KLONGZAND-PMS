@@ -4,6 +4,18 @@ import { createClient } from '@/lib/supabase-server'
 import { revalidatePath } from 'next/cache'
 import { getTodayString } from '@/lib/dateUtils'
 
+export async function createSaleItem({ name, unit, sale_price }) {
+  const supabase = await createClient()
+  const { data, error } = await supabase
+    .from('inventory_items')
+    .insert({ name, unit, reorder_point: 0, is_for_sale: true, sale_price: Number(sale_price) })
+    .select()
+    .single()
+  if (error) return { error: error.message }
+  revalidatePath('/inventory')
+  return { data }
+}
+
 export async function createInventoryItem({ name, unit, reorder_point }) {
   const supabase = await createClient()
   const { data, error } = await supabase

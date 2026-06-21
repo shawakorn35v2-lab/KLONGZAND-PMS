@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation'
 import {
   addStockMovement, createInventoryRequest, updateRequestStatus,
   createInventoryItem, seedCommonAreaItems, updateInventoryItem, sellItem,
+  createSaleItem,
 } from '@/app/actions/inventory'
 import { formatDateTime } from '@/lib/dateUtils'
 
@@ -22,10 +23,11 @@ const STATUS_COLORS = {
 }
 
 const TABS = [
-  { id: 'stock', label: 'สต๊อก' },
-  { id: 'move', label: 'รับ/เบิก' },
-  { id: 'requests', label: 'คำขอ' },
-  { id: 'history', label: 'ประวัติ' },
+  { id: 'stock',      label: 'สต๊อก' },
+  { id: 'move',       label: 'รับ/เบิก' },
+  { id: 'sale_items', label: 'ขายของ' },
+  { id: 'requests',   label: 'คำขอ' },
+  { id: 'history',    label: 'ประวัติ' },
 ]
 
 export default function InventoryClient({ items, movements, requests, rooms, role }) {
@@ -52,6 +54,18 @@ export default function InventoryClient({ items, movements, requests, rooms, rol
   const [sellLoading, setSellLoading] = useState(false)
   const [sellError, setSellError] = useState('')
 
+  // Sale stock-in modal (รับเข้าสต๊อกสำหรับสินค้าขาย)
+  const [saleStockInModal, setSaleStockInModal] = useState(null)
+  const [saleStockInForm, setSaleStockInForm] = useState({ quantity: '', unit_cost: '', note: '' })
+  const [saleStockInLoading, setSaleStockInLoading] = useState(false)
+  const [saleStockInError, setSaleStockInError] = useState('')
+
+  // Add sale item form
+  const [showSaleItemForm, setShowSaleItemForm] = useState(false)
+  const [saleItemForm, setSaleItemForm] = useState({ name: '', unit: 'ชิ้น', sale_price: '' })
+  const [saleItemLoading, setSaleItemLoading] = useState(false)
+  const [saleItemError, setSaleItemError] = useState('')
+
   // Stock-in form
   const [inForm, setInForm] = useState({ item_id: '', quantity: '', unit_cost: '', note: '' })
   const [inLoading, setInLoading] = useState(false)
@@ -70,12 +84,13 @@ export default function InventoryClient({ items, movements, requests, rooms, rol
   // History filters
   const [histFilter, setHistFilter] = useState({ item_id: '', type: '' })
 
+  const supplyItems = items.filter(i => !i.is_for_sale)
+  const saleItems = items.filter(i => i.is_for_sale)
   const lowStockItems = items.filter(i => Number(i.current_stock) < Number(i.reorder_point))
   const pendingCount = requests.filter(r => r.status === 'pending').length
-  const saleItems = items.filter(i => i.is_for_sale)
 
   // Real-time validations
-  const selectedOutItem = items.find(i => i.id === outForm.item_id)
+  const selectedOutItem = supplyItems.find(i => i.id === outForm.item_id)
   const outOverStock = selectedOutItem && Number(outForm.quantity) > 0 && Number(outForm.quantity) > Number(selectedOutItem.current_stock)
   const sellOverStock = sellModal && Number(sellForm.quantity) > 0 && Number(sellForm.quantity) > Number(sellModal.current_stock)
 
@@ -161,6 +176,43 @@ export default function InventoryClient({ items, movements, requests, rooms, rol
     router.refresh()
   }
 
+  async function handleSaleStockIn(e) {
+    e.preventDefault()
+    setSaleStockInError('')
+    if (!saleStockInForm.quantity || Number(saleStockInForm.quantity) <= 0) {
+      setSaleStockInError('กรุณากรอกจำนวน'); return
+    }
+    setSaleStockInLoading(true)
+    const result = await addStockMovement({
+      item_id: saleStockInModal.id,
+      movement_type: 'stock_in',
+      quantity: saleStockInForm.quantity,
+      room_id: null,
+      unit_cost: saleStockInForm.unit_cost || null,
+      note: saleStockInForm.note || null,
+    })
+    setSaleStockInLoading(false)
+    if (result.error) { setSaleStockInError(result.error); return }
+    setSaleStockInModal(null)
+    router.refresh()
+  }
+
+  async function handleCreateSaleItem(e) {
+    e.preventDefault()
+    setSaleItemError('')
+    if (!saleItemForm.name.trim()) { setSaleItemError('กรุณากรอกชื่อสินค้า'); return }
+    if (!saleItemForm.sale_price || Number(saleItemForm.sale_price) <= 0) {
+      setSaleItemError('กรุณากรอกราคาขาย'); return
+    }
+    setSaleItemLoading(true)
+    const result = await createSaleItem(saleItemForm)
+    setSaleItemLoading(false)
+    if (result.error) { setSaleItemError(result.error); return }
+    setSaleItemForm({ name: '', unit: 'ชิ้น', sale_price: '' })
+    setShowSaleItemForm(false)
+    router.refresh()
+  }
+
   async function handleRequest(e) {
     e.preventDefault()
     setReqError('')
@@ -210,12 +262,10 @@ export default function InventoryClient({ items, movements, requests, rooms, rol
           className="flex items-center gap-2 px-4 py-2 bg-orange-500 text-white text-sm font-medium rounded-lg hover:bg-orange-600 transition-colors">
           📤 เบิกของ
         </button>
-        {saleItems.length > 0 && (
-          <button onClick={() => setTab('stock')}
-            className="flex items-center gap-2 px-4 py-2 bg-purple-600 text-white text-sm font-medium rounded-lg hover:bg-purple-700 transition-colors">
-            🛒 ขายสินค้า ({saleItems.length})
-          </button>
-        )}
+        <button onClick={() => setTab('sale_items')}
+          className="flex items-center gap-2 px-4 py-2 bg-purple-600 text-white text-sm font-medium rounded-lg hover:bg-purple-700 transition-colors">
+          🛒 ขายของ{saleItems.length > 0 ? ` (${saleItems.length})` : ''}
+        </button>
       </div>
 
       {/* Tab bar */}
@@ -290,10 +340,10 @@ export default function InventoryClient({ items, movements, requests, rooms, rol
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-100">
-                  {items.length === 0 && (
-                    <tr><td colSpan={6} className="text-center text-gray-400 py-8">ไม่มีรายการ</td></tr>
+                  {supplyItems.length === 0 && (
+                    <tr><td colSpan={6} className="text-center text-gray-400 py-8">ไม่มีรายการของใช้ภายใน</td></tr>
                   )}
-                  {items.map(item => {
+                  {supplyItems.map(item => {
                     const isLow = Number(item.current_stock) < Number(item.reorder_point)
                     return (
                       <tr key={item.id} className={`hover:bg-gray-50 ${isLow ? 'bg-red-50' : ''}`}>
@@ -353,7 +403,7 @@ export default function InventoryClient({ items, movements, requests, rooms, rol
                 <label className="label">รายการของใช้ *</label>
                 <select required value={inForm.item_id} onChange={e => setInForm(p => ({ ...p, item_id: e.target.value }))} className="input">
                   <option value="">-- เลือกรายการ --</option>
-                  {items.map(i => <option key={i.id} value={i.id}>{i.name} (คงเหลือ {formatNum(i.current_stock)} {i.unit})</option>)}
+                  {supplyItems.map(i => <option key={i.id} value={i.id}>{i.name} (คงเหลือ {formatNum(i.current_stock)} {i.unit})</option>)}
                 </select>
               </div>
               <div className="grid grid-cols-2 gap-3">
@@ -386,7 +436,7 @@ export default function InventoryClient({ items, movements, requests, rooms, rol
                 <label className="label">รายการของใช้ *</label>
                 <select required value={outForm.item_id} onChange={e => setOutForm(p => ({ ...p, item_id: e.target.value, quantity: '' }))} className="input">
                   <option value="">-- เลือกรายการ --</option>
-                  {items.map(i => <option key={i.id} value={i.id}>{i.name} (คงเหลือ {formatNum(i.current_stock)} {i.unit})</option>)}
+                  {supplyItems.map(i => <option key={i.id} value={i.id}>{i.name} (คงเหลือ {formatNum(i.current_stock)} {i.unit})</option>)}
                 </select>
               </div>
               <div>
@@ -413,6 +463,106 @@ export default function InventoryClient({ items, movements, requests, rooms, rol
                 {outLoading ? 'กำลังบันทึก...' : '📤 บันทึกเบิกออก'}
               </button>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* ── TAB: ขายของ ── */}
+      {tab === 'sale_items' && (
+        <div className="space-y-4">
+          <div className="flex justify-end">
+            <button onClick={() => { setShowSaleItemForm(!showSaleItemForm); setSaleItemError('') }}
+              className="btn-primary">
+              {showSaleItemForm ? '✕ ปิด' : '+ เพิ่มสินค้าขาย'}
+            </button>
+          </div>
+
+          {showSaleItemForm && (
+            <div className="card max-w-md">
+              <h3 className="text-sm font-semibold text-gray-900 mb-3">เพิ่มสินค้าขายใหม่</h3>
+              <form onSubmit={handleCreateSaleItem} className="space-y-3">
+                <div>
+                  <label className="label">ชื่อสินค้า *</label>
+                  <input type="text" required value={saleItemForm.name}
+                    onChange={e => setSaleItemForm(p => ({ ...p, name: e.target.value }))}
+                    className="input" placeholder="เช่น น้ำดื่ม, ขนม" />
+                </div>
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="label">หน่วย *</label>
+                    <input type="text" required value={saleItemForm.unit}
+                      onChange={e => setSaleItemForm(p => ({ ...p, unit: e.target.value }))}
+                      className="input" placeholder="ชิ้น / ขวด / กล่อง" />
+                  </div>
+                  <div>
+                    <label className="label">ราคาขาย/หน่วย (บาท) *</label>
+                    <input type="number" required min="0.01" step="0.01" value={saleItemForm.sale_price}
+                      onChange={e => setSaleItemForm(p => ({ ...p, sale_price: e.target.value }))}
+                      className="input" placeholder="0.00" />
+                  </div>
+                </div>
+                {saleItemError && <p className="text-sm text-red-600 bg-red-50 px-3 py-2 rounded-lg">{saleItemError}</p>}
+                <div className="flex gap-3">
+                  <button type="submit" disabled={saleItemLoading} className="btn-primary">
+                    {saleItemLoading ? 'กำลังบันทึก...' : 'บันทึก'}
+                  </button>
+                  <button type="button" onClick={() => setShowSaleItemForm(false)} className="btn-secondary">ยกเลิก</button>
+                </div>
+              </form>
+            </div>
+          )}
+
+          <div className="card p-0 overflow-hidden">
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead className="bg-gray-50 border-b border-gray-200">
+                  <tr>
+                    <th className="table-th">ชื่อสินค้า</th>
+                    <th className="table-th text-right">สต๊อกคงเหลือ</th>
+                    <th className="table-th text-right">ราคาขาย/หน่วย</th>
+                    <th className="table-th">การดำเนินการ</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-gray-100">
+                  {saleItems.length === 0 && (
+                    <tr><td colSpan={4} className="text-center text-gray-400 py-8">ยังไม่มีสินค้าขาย — กด "+ เพิ่มสินค้าขาย" เพื่อเริ่มต้น</td></tr>
+                  )}
+                  {saleItems.map(item => {
+                    const isLow = Number(item.current_stock) < Number(item.reorder_point)
+                    return (
+                      <tr key={item.id} className="hover:bg-gray-50">
+                        <td className="table-td font-medium text-gray-900">{item.name}</td>
+                        <td className={`table-td text-right font-bold text-lg ${isLow ? 'text-red-700' : 'text-gray-900'}`}>
+                          {formatNum(item.current_stock)} <span className="text-sm font-normal text-gray-500">{item.unit}</span>
+                        </td>
+                        <td className="table-td text-right font-semibold text-purple-700">
+                          {fmtMoney(item.sale_price)}
+                        </td>
+                        <td className="table-td">
+                          <div className="flex flex-wrap gap-1.5">
+                            <button
+                              onClick={() => { setSaleStockInModal(item); setSaleStockInForm({ quantity: '', unit_cost: '', note: '' }); setSaleStockInError('') }}
+                              className="px-2.5 py-1 text-xs bg-green-600 text-white rounded hover:bg-green-700 font-medium">
+                              📦 รับเข้า
+                            </button>
+                            <button onClick={() => openSellModal(item)}
+                              className="px-2.5 py-1 text-xs bg-purple-600 text-white rounded hover:bg-purple-700 font-medium">
+                              🛒 ขาย
+                            </button>
+                            {isAdmin && (
+                              <button onClick={() => openEditItem(item)}
+                                className="px-2.5 py-1 text-xs bg-gray-200 text-gray-700 rounded hover:bg-gray-300">
+                                ⚙ ตั้งค่า
+                              </button>
+                            )}
+                          </div>
+                        </td>
+                      </tr>
+                    )
+                  })}
+                </tbody>
+              </table>
+            </div>
           </div>
         </div>
       )}
@@ -544,9 +694,9 @@ export default function InventoryClient({ items, movements, requests, rooms, rol
                     <tr key={m.id} className="hover:bg-gray-50">
                       <td className="table-td text-gray-500 whitespace-nowrap">{formatDateTime(m.created_at)}</td>
                       <td className="table-td whitespace-nowrap">
-                        {m.movement_type === 'stock_in' && <span className="text-xs bg-green-100 text-green-700 px-2 py-0.5 rounded-full font-medium">📦 รับเข้า</span>}
-                        {m.movement_type === 'stock_out' && <span className="text-xs bg-orange-100 text-orange-700 px-2 py-0.5 rounded-full font-medium">📤 เบิกออก</span>}
-                        {m.movement_type === 'sale' && <span className="text-xs bg-purple-100 text-purple-700 px-2 py-0.5 rounded-full font-medium">🛒 ขาย</span>}
+                        {m.movement_type === 'stock_in' && <span className="text-xs bg-green-500 text-white px-2 py-0.5 rounded-full font-medium">📦 รับเข้า</span>}
+                        {m.movement_type === 'stock_out' && <span className="text-xs bg-orange-500 text-white px-2 py-0.5 rounded-full font-medium">📤 เบิกออก</span>}
+                        {m.movement_type === 'sale' && <span className="text-xs bg-purple-600 text-white px-2 py-0.5 rounded-full font-medium">🛒 ขาย</span>}
                       </td>
                       <td className="table-td font-medium">{m.item?.name ?? '—'}</td>
                       <td className={`table-td text-right font-semibold whitespace-nowrap ${m.movement_type === 'stock_in' ? 'text-green-700' : m.movement_type === 'sale' ? 'text-purple-700' : 'text-orange-700'}`}>
@@ -566,6 +716,54 @@ export default function InventoryClient({ items, movements, requests, rooms, rol
                 </tbody>
               </table>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── MODAL: รับสินค้าขายเข้าสต๊อก ── */}
+      {saleStockInModal && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-sm p-6">
+            <h3 className="text-base font-bold text-gray-900 mb-1">📦 รับสินค้าเข้าสต๊อก</h3>
+            <p className="text-sm text-gray-500 mb-4">{saleStockInModal.name}</p>
+            <div className="bg-gray-50 rounded-lg p-3 mb-4 text-sm">
+              <div className="flex justify-between">
+                <span className="text-gray-500">สต๊อกปัจจุบัน</span>
+                <span className="font-semibold">{formatNum(saleStockInModal.current_stock)} {saleStockInModal.unit}</span>
+              </div>
+            </div>
+            <form onSubmit={handleSaleStockIn} className="space-y-3">
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="label">จำนวนที่รับเข้า *</label>
+                  <input type="number" required min="0.01" step="0.01"
+                    value={saleStockInForm.quantity}
+                    onChange={e => setSaleStockInForm(p => ({ ...p, quantity: e.target.value }))}
+                    className="input" placeholder="0" autoFocus />
+                </div>
+                <div>
+                  <label className="label">ราคาทุน/หน่วย</label>
+                  <input type="number" min="0" step="0.01"
+                    value={saleStockInForm.unit_cost}
+                    onChange={e => setSaleStockInForm(p => ({ ...p, unit_cost: e.target.value }))}
+                    className="input" placeholder="0.00" />
+                </div>
+              </div>
+              <div>
+                <label className="label">หมายเหตุ</label>
+                <input type="text" value={saleStockInForm.note}
+                  onChange={e => setSaleStockInForm(p => ({ ...p, note: e.target.value }))}
+                  className="input" placeholder="รายละเอียดเพิ่มเติม" />
+              </div>
+              {saleStockInError && <p className="text-sm text-red-600 bg-red-50 px-3 py-2 rounded-lg">{saleStockInError}</p>}
+              <div className="flex gap-3 pt-1">
+                <button type="submit" disabled={saleStockInLoading}
+                  className="flex-1 py-2.5 bg-green-600 text-white text-sm font-medium rounded-lg hover:bg-green-700 disabled:opacity-50 transition-colors">
+                  {saleStockInLoading ? 'กำลังบันทึก...' : '📦 บันทึกรับเข้า'}
+                </button>
+                <button type="button" onClick={() => setSaleStockInModal(null)} className="btn-secondary">ยกเลิก</button>
+              </div>
+            </form>
           </div>
         </div>
       )}
