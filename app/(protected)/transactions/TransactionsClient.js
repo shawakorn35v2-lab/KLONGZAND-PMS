@@ -15,6 +15,7 @@ const EXPORT_COLS = [
   { key: 'tx_date', header: 'วันที่', format: 'date' },
   { key: 'tx_type', header: 'ประเภท', format: 'txtype' },
   { key: 'category', header: 'หมวดหมู่' },
+  { key: 'room_no', header: 'ห้อง', format: 'nullable' },
   { key: 'amount', header: 'จำนวนเงิน', format: 'number2' },
   { key: 'note', header: 'หมายเหตุ', format: 'nullable' },
 ]
@@ -210,6 +211,7 @@ export default function TransactionsClient({
                 <th className="table-th">วันที่</th>
                 <th className="table-th">ประเภท</th>
                 <th className="table-th">หมวดหมู่</th>
+                <th className="table-th">ห้อง</th>
                 <th className="table-th text-right">จำนวนเงิน</th>
                 <th className="table-th">หมายเหตุ</th>
                 <th className="table-th">สถานะ</th>
@@ -218,13 +220,14 @@ export default function TransactionsClient({
             </thead>
             <tbody className="divide-y divide-gray-100">
               {transactions.length === 0 && (
-                <tr><td colSpan={7} className="text-center text-gray-400 py-8">ไม่มีรายการ</td></tr>
+                <tr><td colSpan={8} className="text-center text-gray-400 py-8">ไม่มีรายการ</td></tr>
               )}
               {transactions.map(t => (
                 <tr key={t.id} className={`hover:bg-gray-50 ${t.is_closed ? 'opacity-70' : ''}`}>
                   <td className="table-td">{formatDate(t.tx_date)}</td>
                   <td className="table-td"><TxTypeBadge type={t.tx_type} /></td>
                   <td className="table-td">{t.category}</td>
+                  <td className="table-td text-gray-500">{t.room_no ?? '—'}</td>
                   <td className={`table-td text-right font-semibold ${t.tx_type === 'income' ? 'text-green-700' : 'text-red-700'}`}>
                     {t.tx_type === 'income' ? '+' : '-'}{formatCurrency(t.amount)}
                   </td>

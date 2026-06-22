@@ -18,7 +18,7 @@ export default async function TransactionsPage({ searchParams }) {
   ] = await Promise.all([
     supabase
       .from('transactions')
-      .select('*')
+      .select('*, bookings(room_id, rooms(room_no))')
       .gte('tx_date', from)
       .lte('tx_date', to)
       .order('created_at', { ascending: false }),
@@ -40,7 +40,10 @@ export default async function TransactionsPage({ searchParams }) {
       .order('name'),
   ])
 
-  const txs = transactions ?? []
+  const txs = (transactions ?? []).map(t => ({
+    ...t,
+    room_no: t.bookings?.rooms?.room_no ?? null,
+  }))
   const todayTxs = txs.filter(t => t.tx_date === today)
   const todayIncome = todayTxs.filter(t => t.tx_type === 'income').reduce((s, t) => s + Number(t.amount), 0)
   const todayExpense = todayTxs.filter(t => t.tx_type === 'expense').reduce((s, t) => s + Number(t.amount), 0)

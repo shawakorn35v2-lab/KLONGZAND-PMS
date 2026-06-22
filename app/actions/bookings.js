@@ -41,12 +41,14 @@ export async function createBooking({ roomId, customerId, newCustomer, channel, 
   if (bookingErr) return { error: bookingErr.message }
 
   if (Number(deposit) > 0) {
+    const { data: roomData } = await supabase.from('rooms').select('room_no').eq('id', roomId).single()
+    const roomNo = roomData?.room_no ?? ''
     await supabase.from('transactions').insert({
       tx_date: checkinDate,
       tx_type: 'income',
       category: 'ค่ามัดจำ',
       amount: Number(deposit),
-      note: `มัดจำการจองห้อง`,
+      note: roomNo ? `มัดจำการจองห้อง ห้อง ${roomNo}` : `มัดจำการจองห้อง`,
       booking_id: booking.id,
       created_by: user.id,
     })
@@ -64,7 +66,7 @@ export async function checkinBooking(bookingId) {
 
   const { data: booking, error: fetchErr } = await supabase
     .from('bookings')
-    .select('price, deposit, room_id')
+    .select('price, deposit, room_id, rooms(room_no)')
     .eq('id', bookingId)
     .single()
   if (fetchErr) return { error: fetchErr.message }
@@ -77,12 +79,13 @@ export async function checkinBooking(bookingId) {
 
   const remaining = Number(booking.price) - Number(booking.deposit)
   if (remaining > 0) {
+    const roomNo = booking.rooms?.room_no ?? ''
     await supabase.from('transactions').insert({
       tx_date: getTodayString(),
       tx_type: 'income',
       category: 'ค่าห้อง',
       amount: remaining,
-      note: `รับเงินเช็คอิน (ส่วนที่เหลือ)`,
+      note: roomNo ? `รับเงินเช็คอิน ห้อง ${roomNo} (ส่วนที่เหลือ)` : `รับเงินเช็คอิน (ส่วนที่เหลือ)`,
       booking_id: bookingId,
       created_by: user.id,
     })
