@@ -2,22 +2,29 @@ import { createClient } from '@/lib/supabase-server'
 import BookingsClient from './BookingsClient'
 import { getTodayString } from '@/lib/dateUtils'
 
-export default async function BookingsPage() {
+export default async function BookingsPage({ searchParams }) {
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
   const today = getTodayString()
+
+  const { dateFrom, dateTo } = await searchParams ?? {}
+
+  let bookingsQuery = supabase
+    .from('bookings')
+    .select('*, room:rooms(room_no, building), customer:customers(full_name, phone), transactions(id, is_closed)')
+    .neq('status', 'cancelled')
+    .order('checkin_date', { ascending: false })
+    .limit(300)
+
+  if (dateFrom) bookingsQuery = bookingsQuery.gte('checkin_date', dateFrom)
+  if (dateTo) bookingsQuery = bookingsQuery.lte('checkin_date', dateTo)
 
   const [
     { data: bookings },
     { data: rooms },
     { data: profile },
   ] = await Promise.all([
-    supabase
-      .from('bookings')
-      .select('*, room:rooms(room_no, building), customer:customers(full_name, phone), transactions(id, is_closed)')
-      .neq('status', 'cancelled')
-      .order('checkin_date', { ascending: false })
-      .limit(200),
+    bookingsQuery,
     supabase
       .from('rooms')
       .select('id, room_no, building, price_per_night, is_active, is_monthly')
@@ -42,6 +49,8 @@ export default async function BookingsPage() {
         today={today}
         role={profile?.role ?? 'staff'}
         adminName={profile?.full_name ?? ''}
+        dateFrom={dateFrom ?? ''}
+        dateTo={dateTo ?? ''}
       />
     </div>
   )

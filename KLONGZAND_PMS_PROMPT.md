@@ -60,10 +60,14 @@
 - ประวัติมิเตอร์ย้อนหลังของห้องนั้น (list ทุกเดือน)
 
 ### `/bookings` (จองห้องพัก)
-- ฟอร์มสร้างการจองใหม่: เลือกห้อง, ลูกค้า (เลือกจากเดิมหรือเพิ่มใหม่), วันเข้า-ออก, ช่องทาง (walk-in/Agoda/Line/Facebook/Sale), ราคา, มัดจำ
-- ปฏิทิน/ตารางการจอง แสดงห้อง x วันที่ ดูได้ว่าห้องไหนว่าง/ไม่ว่างช่วงไหน
+- ฟอร์มสร้างการจองใหม่: **ประเภทการพัก** radio — "พักค้างคืน" (stay_type='overnight', checkin/checkout date แบบเดิม) หรือ "พักชั่วคราว" (stay_type='temporary', date + checkin_time + checkout_time วันเดียวกัน)
+- ห้องเดียวกันรับ **หลายรอบชั่วคราว** ในวันเดียวกันได้ (ตราบเท่าที่เวลาไม่ทับซ้อน); server-side conflict check ใน `createBooking` (`app/actions/bookings.js`)
+- ปฏิทิน/ตารางห้องว่าง: แสดง 7 วัน, **วันนี้อยู่กลาง (offset -3)**, เลื่อนซ้าย-ขวาได้ทีละ 7 วัน, ปุ่ม "วันนี้" reset กลับ; temporary booking ใช้ checkin_date เดียวกันสำหรับการแรเงา
+- **กรองช่วงวันที่** ในรายการจอง (dateFrom/dateTo กรอง checkin_date ที่ server)
 - ปุ่มเช็คอิน / เช็คเอาท์ เปลี่ยนสถานะ booking และอัปเดตสถานะห้อง (housekeeping_status เป็น 'dirty' หลังเช็คเอาท์)
 - เมื่อเช็คอิน/ยืนยันชำระเงิน ให้สร้างรายการใน `transactions` (tx_type='income') อัตโนมัติ ผูกกับ `booking_id`
+- **Admin แก้ราคา/มัดจำ**: `adminUpdateBooking` อัปเดต transaction amounts อัตโนมัติ (ค่ามัดจำ = deposit ใหม่, ค่าห้อง = price - deposit ใหม่) — ป้องกัน A2-style desync
+- **Admin ลบการจอง**: ลบ transactions ทั้งหมด (รวมปิดยอด) ก่อนลบ booking พร้อม popup เตือนเมื่อมี closed transactions
 
 ### `/customers` (ลูกค้า + ประวัติ)
 - รายชื่อลูกค้าทั้งหมด ค้นหาได้ด้วยชื่อ/เบอร์โทร

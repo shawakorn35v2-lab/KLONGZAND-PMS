@@ -52,7 +52,7 @@ export default async function DashboardPage() {
     supabase.from('bookings').select('room_id, channel, price, status').gte('checkin_date', twelveMonthsAgo),
     supabase.from('transactions').select('tx_type, amount'),
     supabase.from('bookings').select('*', { count: 'exact', head: true }),
-    supabase.from('bookings').select('room_id, checkin_date, checkout_date').neq('status', 'cancelled').gte('checkout_date', twelveMonthsAgo),
+    supabase.from('bookings').select('room_id, checkin_date, checkout_date, stay_type').neq('status', 'cancelled').gte('checkout_date', twelveMonthsAgo),
   ])
 
   const calcStats = (txs) => {
@@ -73,18 +73,23 @@ export default async function DashboardPage() {
   const allTimeExpense = (allTimeTxs ?? []).filter(t => t.tx_type === 'expense').reduce((s, t) => s + Number(t.amount), 0)
   const allTimeNet = allTimeIncome - allTimeExpense
 
-  // Real-time occupancy (date-based)
-  const occupiedRoomIds = new Set()
+  // Real-time occupancy: overnight=1.0, temporary=0.5 per round
+  const overnightRoomSet = new Set()
+  let tempScore = 0
   ;(occupancyBookings ?? []).forEach(b => {
-    if (b.checkin_date <= today && b.checkout_date > today) occupiedRoomIds.add(b.room_id)
+    if (b.stay_type === 'temporary') {
+      if (b.checkin_date === today) tempScore += 0.5
+    } else {
+      if (b.checkin_date <= today && b.checkout_date > today) overnightRoomSet.add(b.room_id)
+    }
   })
   ;(rooms ?? []).forEach(r => {
     if (r.is_monthly && r.monthly_start_date && r.monthly_start_date <= today &&
         (!r.monthly_end_date || r.monthly_end_date >= today)) {
-      occupiedRoomIds.add(r.id)
+      overnightRoomSet.add(r.id)
     }
   })
-  const realtimeOccupied = occupiedRoomIds.size
+  const realtimeOccupied = overnightRoomSet.size + tempScore
   const realtimeRate = totalRooms > 0 ? ((realtimeOccupied / totalRooms) * 100).toFixed(1) : '0.0'
 
   // Current month string for OccupancyMonthCard default

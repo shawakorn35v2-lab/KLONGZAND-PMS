@@ -10,6 +10,14 @@ import { createClient } from '@/lib/supabase-browser'
 
 function formatCurrency(n) { return '฿' + Number(n || 0).toLocaleString('th-TH', { minimumFractionDigits: 2 }) }
 
+function makeGridDays(today, offset) {
+  return Array.from({ length: 7 }, (_, i) => {
+    const [y, m, day] = today.split('-').map(Number)
+    const d = new Date(y, m - 1, day + offset + i)
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
+  })
+}
+
 const STATUS_FILTERS = [
   { value: '', label: 'ทั้งหมด' },
   { value: 'reserved', label: 'จองแล้ว' },
@@ -59,7 +67,7 @@ async function getSignedUrl(path) {
   return data?.signedUrl ?? null
 }
 
-export default function BookingsClient({ bookings, rooms, today, role, adminName }) {
+export default function BookingsClient({ bookings, rooms, today, role, adminName, dateFrom, dateTo }) {
   const router = useRouter()
   const isAdmin = role === 'admin'
 
@@ -67,11 +75,18 @@ export default function BookingsClient({ bookings, rooms, today, role, adminName
   const [statusFilter, setStatusFilter] = useState('')
   const [loadingId, setLoadingId] = useState(null)
 
-  // Room search
+  // Booking list date filter
+  const [filterFrom, setFilterFrom] = useState(dateFrom ?? '')
+  const [filterTo, setFilterTo] = useState(dateTo ?? '')
+
+  // Room availability search
   const [searchFrom, setSearchFrom] = useState('')
   const [searchTo, setSearchTo] = useState('')
   const [searchRoomId, setSearchRoomId] = useState('')
   const [searchResults, setSearchResults] = useState(null)
+
+  // Availability grid offset (default: today in center = -3)
+  const [gridOffset, setGridOffset] = useState(-3)
 
   // Admin edit modal
   const [editBooking, setEditBooking] = useState(null)
@@ -93,6 +108,36 @@ export default function BookingsClient({ bookings, rooms, today, role, adminName
       : null,
     [bookings, editForm.room_id, editForm.checkin_date, editForm.checkout_date, editBooking]
   )
+
+  // Availability grid
+  const days = useMemo(() => makeGridDays(today, gridOffset), [today, gridOffset])
+
+  const occupiedSet = useMemo(() => {
+    const set = new Set()
+    bookings.forEach(b => {
+      if (b.status === 'cancelled') return
+      days.forEach(d => {
+        const isOccupied = b.stay_type === 'temporary'
+          ? b.checkin_date === d
+          : b.checkin_date <= d && b.checkout_date > d
+        if (isOccupied) set.add(`${b.room_id}__${d}`)
+      })
+    })
+    return set
+  }, [bookings, days])
+
+  function applyBookingFilter() {
+    const params = new URLSearchParams()
+    if (filterFrom) params.set('dateFrom', filterFrom)
+    if (filterTo) params.set('dateTo', filterTo)
+    router.push(`/bookings${params.toString() ? '?' + params.toString() : ''}`)
+  }
+
+  function resetBookingFilter() {
+    setFilterFrom('')
+    setFilterTo('')
+    router.push('/bookings')
+  }
 
   function handleSearch() {
     if (!searchFrom || !searchTo) return
@@ -124,6 +169,9 @@ export default function BookingsClient({ bookings, rooms, today, role, adminName
       note: b.note ?? '',
       id_card_url: b.id_card_url ?? null,
       vehicle_reg_url: b.vehicle_reg_url ?? null,
+      stay_type: b.stay_type ?? 'overnight',
+      checkin_time: b.checkin_time ?? '',
+      checkout_time: b.checkout_time ?? '',
     })
     setTransferReason('')
     setEditError('')
@@ -173,7 +221,7 @@ export default function BookingsClient({ bookings, rooms, today, role, adminName
     const hasClosedTx = editBooking.transactions?.some(t => t.is_closed)
 
     if ((priceChanged || depositChanged) && hasClosedTx) {
-      if (!confirm('รายการนี้ปิดยอดไปแล้ว การแก้ไขราคา/มัดจำจะกระทบยอดที่ปิดไปแล้ว ยืนยันหรือไม่?')) return
+      if (!confirm('รายการนี้ปิดยอดไปแล้ว การแก้ไขราคา/มัดจำจะอัปเดตยอดรายรับที่ผูกอยู่ด้วย ยืนยันหรือไม่?')) return
     }
 
     if (editConflict) {
@@ -208,7 +256,7 @@ export default function BookingsClient({ bookings, rooms, today, role, adminName
   async function handleDelete(b) {
     const hasClosedTx = b.transactions?.some(t => t.is_closed)
     const msg = hasClosedTx
-      ? `ลบการจองห้อง ${b.room?.room_no ?? ''}?\n(มี transaction ที่ปิดยอดแล้วผูกอยู่)`
+      ? `ลบการจองห้อง ${b.room?.room_no ?? ''}?\n(มี transaction ที่ปิดยอดแล้วผูกอยู่ — จะถูกลบไปด้วย)`
       : `ลบการจองห้อง ${b.room?.room_no ?? ''}?`
     if (!confirm(msg)) return
     setLoadingId(b.id)
@@ -217,26 +265,6 @@ export default function BookingsClient({ bookings, rooms, today, role, adminName
     if (result?.error) alert(result.error)
     else router.refresh()
   }
-
-  // Availability grid
-  const days = Array.from({ length: 7 }, (_, i) => {
-    const [y, m, day] = today.split('-').map(Number)
-    const d = new Date(y, m - 1, day + i)
-    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
-  })
-
-  const occupiedSet = useMemo(() => {
-    const set = new Set()
-    bookings.forEach(b => {
-      if (b.status === 'cancelled') return
-      days.forEach(d => {
-        if (b.checkin_date <= d && b.checkout_date > d) {
-          set.add(`${b.room_id}__${d}`)
-        }
-      })
-    })
-    return set
-  }, [bookings])
 
   const selectedRoom = editBooking ? rooms.find(r => r.id === editForm.room_id) : null
 
@@ -324,10 +352,35 @@ export default function BookingsClient({ bookings, rooms, today, role, adminName
         )}
       </div>
 
-      {/* Availability grid */}
+      {/* Availability grid with navigation */}
       <div className="card p-0 overflow-hidden">
-        <div className="px-6 py-4 border-b border-gray-200">
-          <h2 className="text-base font-semibold text-gray-900">ห้องว่าง 7 วันข้างหน้า</h2>
+        <div className="px-6 py-4 border-b border-gray-200 flex flex-wrap items-center gap-3">
+          <h2 className="text-base font-semibold text-gray-900 flex-1">สถานะห้องพัก</h2>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => setGridOffset(o => o - 7)}
+              className="px-2 py-1 text-sm bg-gray-100 hover:bg-gray-200 rounded font-medium"
+            >
+              ◀
+            </button>
+            <span className="text-xs text-gray-600 min-w-[140px] text-center">
+              {formatShortDate(days[0])} – {formatShortDate(days[6])}
+            </span>
+            <button
+              onClick={() => setGridOffset(o => o + 7)}
+              className="px-2 py-1 text-sm bg-gray-100 hover:bg-gray-200 rounded font-medium"
+            >
+              ▶
+            </button>
+            {gridOffset !== -3 && (
+              <button
+                onClick={() => setGridOffset(-3)}
+                className="px-2 py-1 text-xs bg-blue-100 text-blue-700 hover:bg-blue-200 rounded font-medium"
+              >
+                วันนี้
+              </button>
+            )}
+          </div>
         </div>
         <div className="overflow-x-auto p-4">
           <table className="text-xs w-full">
@@ -335,8 +388,9 @@ export default function BookingsClient({ bookings, rooms, today, role, adminName
               <tr>
                 <th className="text-left px-2 py-1 text-gray-500 font-medium w-16">ห้อง</th>
                 {days.map(d => (
-                  <th key={d} className="px-1 py-1 text-center text-gray-500 font-medium">
+                  <th key={d} className={`px-1 py-1 text-center font-medium ${d === today ? 'text-blue-600' : 'text-gray-500'}`}>
                     {formatShortDate(d)}
+                    {d === today && <span className="block text-[10px] text-blue-500">วันนี้</span>}
                   </th>
                 ))}
               </tr>
@@ -347,8 +401,9 @@ export default function BookingsClient({ bookings, rooms, today, role, adminName
                   <td className="px-2 py-1.5 font-semibold text-gray-700">{room.room_no}</td>
                   {days.map(d => {
                     const occ = occupiedSet.has(`${room.id}__${d}`)
+                    const isToday = d === today
                     return (
-                      <td key={d} className="px-1 py-1.5 text-center rounded">
+                      <td key={d} className={`px-1 py-1.5 text-center ${isToday ? 'bg-blue-50' : ''}`}>
                         <span className={`inline-block w-full rounded text-center py-0.5 ${occ ? 'bg-red-200 text-red-700' : 'bg-green-100 text-green-700'}`}>
                           {occ ? '●' : '○'}
                         </span>
@@ -382,6 +437,18 @@ export default function BookingsClient({ bookings, rooms, today, role, adminName
           </div>
         </div>
 
+        {/* Date range filter */}
+        <div className="px-6 py-3 border-b border-gray-100 flex flex-wrap items-center gap-3 bg-gray-50">
+          <span className="text-sm text-gray-600">กรองช่วงวันเช็คอิน:</span>
+          <input type="date" value={filterFrom} onChange={e => setFilterFrom(e.target.value)} className="input max-w-[150px] text-sm" />
+          <span className="text-gray-400 text-sm">ถึง</span>
+          <input type="date" value={filterTo} min={filterFrom} onChange={e => setFilterTo(e.target.value)} className="input max-w-[150px] text-sm" />
+          <button onClick={applyBookingFilter} className="btn-secondary text-sm">ค้นหา</button>
+          {(dateFrom || dateTo) && (
+            <button onClick={resetBookingFilter} className="text-xs text-gray-400 hover:text-gray-600">รีเซ็ต</button>
+          )}
+        </div>
+
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
             <thead className="bg-gray-50 border-b border-gray-200">
@@ -403,13 +470,28 @@ export default function BookingsClient({ bookings, rooms, today, role, adminName
               )}
               {filtered.map(b => (
                 <tr key={b.id} className="hover:bg-gray-50">
-                  <td className="table-td font-semibold">{b.room?.room_no ?? '-'}</td>
+                  <td className="table-td">
+                    <div className="font-semibold">{b.room?.room_no ?? '-'}</div>
+                    {b.stay_type === 'temporary' && (
+                      <span className="text-xs bg-orange-100 text-orange-700 px-1.5 py-0.5 rounded font-medium">ชั่วคราว</span>
+                    )}
+                  </td>
                   <td className="table-td">
                     <div>{b.customer?.full_name ?? '-'}</div>
                     {b.customer?.phone && <div className="text-xs text-gray-400">{b.customer.phone}</div>}
                   </td>
-                  <td className="table-td">{formatDate(b.checkin_date)}</td>
-                  <td className="table-td">{formatDate(b.checkout_date)}</td>
+                  <td className="table-td">
+                    <div>{formatDate(b.checkin_date)}</div>
+                    {b.stay_type === 'temporary' && b.checkin_time && (
+                      <div className="text-xs text-orange-600">{b.checkin_time.slice(0, 5)}</div>
+                    )}
+                  </td>
+                  <td className="table-td">
+                    <div>{formatDate(b.checkout_date)}</div>
+                    {b.stay_type === 'temporary' && b.checkout_time && (
+                      <div className="text-xs text-orange-600">{b.checkout_time.slice(0, 5)}</div>
+                    )}
+                  </td>
                   <td className="table-td"><ChannelBadge channel={b.channel} /></td>
                   <td className="table-td text-right">{formatCurrency(b.price)}</td>
                   <td className="table-td text-right">{formatCurrency(b.deposit)}</td>
@@ -465,7 +547,7 @@ export default function BookingsClient({ bookings, rooms, today, role, adminName
           <div className="bg-white rounded-t-2xl sm:rounded-2xl shadow-2xl w-full sm:max-w-lg p-6 max-h-[90vh] overflow-y-auto">
             <div className="flex items-center justify-between mb-4">
               <h3 className="text-base font-bold text-gray-900">
-                แก้ไข / โยกวันเข้าพัก — {editBooking.customer?.full_name ?? ''}
+                แก้ไข — {editBooking.customer?.full_name ?? ''}
               </h3>
               {editBooking.transactions?.some(t => t.is_closed) && (
                 <span className="text-xs bg-amber-100 text-amber-700 px-2 py-1 rounded-full font-medium">🔒 ปิดยอดแล้ว</span>
@@ -473,6 +555,27 @@ export default function BookingsClient({ bookings, rooms, today, role, adminName
             </div>
 
             <form onSubmit={handleEdit} className="space-y-4">
+              {/* Stay type (read-only display) */}
+              <div>
+                <label className="label">ประเภทการพัก</label>
+                <div className="flex gap-4 mt-1">
+                  <label className="flex items-center gap-2 cursor-pointer text-sm">
+                    <input type="radio" name="editStayType" value="overnight"
+                      checked={editForm.stay_type === 'overnight'}
+                      onChange={() => setEdit('stay_type', 'overnight')}
+                      className="accent-blue-600" />
+                    <span>พักค้างคืน</span>
+                  </label>
+                  <label className="flex items-center gap-2 cursor-pointer text-sm">
+                    <input type="radio" name="editStayType" value="temporary"
+                      checked={editForm.stay_type === 'temporary'}
+                      onChange={() => setEdit('stay_type', 'temporary')}
+                      className="accent-orange-500" />
+                    <span>พักชั่วคราว</span>
+                  </label>
+                </div>
+              </div>
+
               {/* Room */}
               <div>
                 <label className="label">ห้องพัก (โยกห้องได้)</label>
@@ -485,13 +588,8 @@ export default function BookingsClient({ bookings, rooms, today, role, adminName
                   <div className="mt-2 space-y-2">
                     <div>
                       <label className="label">เหตุผลการย้ายห้อง</label>
-                      <input
-                        type="text"
-                        value={transferReason}
-                        onChange={e => setTransferReason(e.target.value)}
-                        className="input"
-                        placeholder="เช่น ห้องมีปัญหา / ลูกค้าขอย้าย"
-                      />
+                      <input type="text" value={transferReason} onChange={e => setTransferReason(e.target.value)}
+                        className="input" placeholder="เช่น ห้องมีปัญหา / ลูกค้าขอย้าย" />
                     </div>
                     <p className="text-xs text-amber-600">
                       ⚠ ห้อง {editBooking.room?.room_no} จะถูกตั้งเป็น "รอทำความสะอาด" อัตโนมัติ และบันทึกใน note
@@ -501,19 +599,40 @@ export default function BookingsClient({ bookings, rooms, today, role, adminName
               </div>
 
               {/* Dates */}
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                <div>
-                  <label className="label">วันเช็คอิน (โยกวันได้)</label>
-                  <input type="date" value={editForm.checkin_date}
-                    onChange={e => setEdit('checkin_date', e.target.value)} className="input" />
+              {editForm.stay_type === 'temporary' ? (
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                  <div>
+                    <label className="label">วันที่</label>
+                    <input type="date" value={editForm.checkin_date}
+                      onChange={e => { setEdit('checkin_date', e.target.value); setEdit('checkout_date', e.target.value) }}
+                      className="input" />
+                  </div>
+                  <div>
+                    <label className="label">เวลาเข้า</label>
+                    <input type="time" value={editForm.checkin_time ?? ''}
+                      onChange={e => setEdit('checkin_time', e.target.value)} className="input" />
+                  </div>
+                  <div>
+                    <label className="label">เวลาออก</label>
+                    <input type="time" value={editForm.checkout_time ?? ''}
+                      onChange={e => setEdit('checkout_time', e.target.value)} className="input" />
+                  </div>
                 </div>
-                <div>
-                  <label className="label">วันเช็คเอาท์</label>
-                  <input type="date" value={editForm.checkout_date}
-                    min={editForm.checkin_date}
-                    onChange={e => setEdit('checkout_date', e.target.value)} className="input" />
+              ) : (
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <div>
+                    <label className="label">วันเช็คอิน</label>
+                    <input type="date" value={editForm.checkin_date}
+                      onChange={e => setEdit('checkin_date', e.target.value)} className="input" />
+                  </div>
+                  <div>
+                    <label className="label">วันเช็คเอาท์</label>
+                    <input type="date" value={editForm.checkout_date}
+                      min={editForm.checkin_date}
+                      onChange={e => setEdit('checkout_date', e.target.value)} className="input" />
+                  </div>
                 </div>
-              </div>
+              )}
 
               {/* Conflict warning */}
               {editConflict && (

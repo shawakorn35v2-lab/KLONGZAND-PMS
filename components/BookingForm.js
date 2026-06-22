@@ -15,14 +15,31 @@ const CHANNEL_OPTIONS = [
   { value: 'sale', label: 'Sale' },
 ]
 
-function getAvailableRooms(rooms, bookings, checkin, checkout) {
-  if (!checkin || !checkout) return rooms.filter(r => r.is_active && !r.is_monthly)
+function getAvailableRooms(rooms, bookings, stayType, checkinDate, checkoutDate) {
+  const base = rooms.filter(r => r.is_active && !r.is_monthly)
+  if (stayType === 'temporary') {
+    if (!checkinDate) return base
+    // For temporary: exclude rooms with overnight bookings covering this date
+    const overnightOccupied = new Set(
+      (bookings ?? [])
+        .filter(b =>
+          b.status !== 'cancelled' &&
+          b.stay_type !== 'temporary' &&
+          b.checkin_date <= checkinDate &&
+          b.checkout_date > checkinDate
+        )
+        .map(b => b.room_id)
+    )
+    return base.filter(r => !overnightOccupied.has(r.id))
+  }
+  // overnight: existing logic
+  if (!checkinDate || !checkoutDate) return base
   const occupied = new Set(
     (bookings ?? [])
-      .filter(b => b.status !== 'cancelled' && b.checkin_date < checkout && b.checkout_date > checkin)
+      .filter(b => b.status !== 'cancelled' && b.checkin_date < checkoutDate && b.checkout_date > checkinDate)
       .map(b => b.room_id)
   )
-  return rooms.filter(r => r.is_active && !r.is_monthly && !occupied.has(r.id))
+  return base.filter(r => !occupied.has(r.id))
 }
 
 async function uploadDoc(file) {
@@ -38,11 +55,14 @@ export default function BookingForm({ rooms, bookings, onClose }) {
   const router = useRouter()
   const today = getTodayString()
 
+  const [stayType, setStayType] = useState('overnight')
   const [form, setForm] = useState({
     roomId: '',
     channel: 'walkin',
     checkinDate: today,
     checkoutDate: '',
+    checkinTime: '',
+    checkoutTime: '',
     price: '',
     deposit: '',
     note: '',
@@ -54,7 +74,7 @@ export default function BookingForm({ rooms, bookings, onClose }) {
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
 
-  const availableRooms = getAvailableRooms(rooms, bookings, form.checkinDate, form.checkoutDate)
+  const availableRooms = getAvailableRooms(rooms, bookings, stayType, form.checkinDate, form.checkoutDate)
 
   function set(field, value) {
     setForm(prev => ({ ...prev, [field]: value }))
@@ -79,10 +99,18 @@ export default function BookingForm({ rooms, bookings, onClose }) {
       return
     }
     if (!form.roomId) { setError('กรุณาเลือกห้องพัก'); return }
-    if (!form.checkoutDate || form.checkoutDate <= form.checkinDate) {
-      setError('วันเช็คเอาท์ต้องหลังวันเช็คอิน')
-      return
+
+    if (stayType === 'temporary') {
+      if (!form.checkinDate) { setError('กรุณาเลือกวันที่'); return }
+      if (!form.checkinTime || !form.checkoutTime) { setError('กรุณากรอกเวลาเข้าและเวลาออก'); return }
+      if (form.checkoutTime <= form.checkinTime) { setError('เวลาออกต้องหลังเวลาเข้า'); return }
+    } else {
+      if (!form.checkoutDate || form.checkoutDate <= form.checkinDate) {
+        setError('วันเช็คเอาท์ต้องหลังวันเช็คอิน')
+        return
+      }
     }
+
     setLoading(true)
     try {
       const idCardUrl = docFiles.idCard ? await uploadDoc(docFiles.idCard) : null
@@ -94,12 +122,15 @@ export default function BookingForm({ rooms, bookings, onClose }) {
         newCustomer: customerData.newCustomer,
         channel: form.channel,
         checkinDate: form.checkinDate,
-        checkoutDate: form.checkoutDate,
+        checkoutDate: stayType === 'temporary' ? form.checkinDate : form.checkoutDate,
         price: form.price || 0,
         deposit: form.deposit || 0,
         note: form.note,
         idCardUrl,
         vehicleRegUrl,
+        stayType,
+        checkinTime: stayType === 'temporary' ? form.checkinTime : null,
+        checkoutTime: stayType === 'temporary' ? form.checkoutTime : null,
       })
       if (result.error) { setError(result.error); return }
       router.refresh()
@@ -118,16 +149,55 @@ export default function BookingForm({ rooms, bookings, onClose }) {
         <CustomerSearchInput onSelect={setCustomerData} />
       </div>
 
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-        <div>
-          <label className="label">วันเช็คอิน *</label>
-          <input type="date" required value={form.checkinDate} onChange={e => set('checkinDate', e.target.value)} className="input" />
-        </div>
-        <div>
-          <label className="label">วันเช็คเอาท์ *</label>
-          <input type="date" required value={form.checkoutDate} min={form.checkinDate} onChange={e => set('checkoutDate', e.target.value)} className="input" />
+      {/* ประเภทการพัก */}
+      <div>
+        <label className="label">ประเภทการพัก</label>
+        <div className="flex gap-4 mt-1">
+          <label className="flex items-center gap-2 cursor-pointer text-sm">
+            <input type="radio" name="stayType" value="overnight"
+              checked={stayType === 'overnight'}
+              onChange={() => setStayType('overnight')}
+              className="accent-blue-600" />
+            <span>พักค้างคืน</span>
+          </label>
+          <label className="flex items-center gap-2 cursor-pointer text-sm">
+            <input type="radio" name="stayType" value="temporary"
+              checked={stayType === 'temporary'}
+              onChange={() => setStayType('temporary')}
+              className="accent-orange-500" />
+            <span>พักชั่วคราว</span>
+          </label>
         </div>
       </div>
+
+      {/* Date/time inputs */}
+      {stayType === 'overnight' ? (
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+          <div>
+            <label className="label">วันเช็คอิน *</label>
+            <input type="date" required value={form.checkinDate} onChange={e => set('checkinDate', e.target.value)} className="input" />
+          </div>
+          <div>
+            <label className="label">วันเช็คเอาท์ *</label>
+            <input type="date" required value={form.checkoutDate} min={form.checkinDate} onChange={e => set('checkoutDate', e.target.value)} className="input" />
+          </div>
+        </div>
+      ) : (
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+          <div>
+            <label className="label">วันที่ *</label>
+            <input type="date" required value={form.checkinDate} onChange={e => set('checkinDate', e.target.value)} className="input" />
+          </div>
+          <div>
+            <label className="label">เวลาเข้า *</label>
+            <input type="time" required value={form.checkinTime} onChange={e => set('checkinTime', e.target.value)} className="input" />
+          </div>
+          <div>
+            <label className="label">เวลาออก *</label>
+            <input type="time" required value={form.checkoutTime} onChange={e => set('checkoutTime', e.target.value)} className="input" />
+          </div>
+        </div>
+      )}
 
       <div>
         <label className="label">ห้องพัก *</label>
@@ -139,8 +209,8 @@ export default function BookingForm({ rooms, bookings, onClose }) {
             </option>
           ))}
         </select>
-        {availableRooms.length === 0 && form.checkinDate && form.checkoutDate && (
-          <p className="text-xs text-red-500 mt-1">ไม่มีห้องว่างในช่วงวันที่เลือก</p>
+        {availableRooms.length === 0 && form.checkinDate && (
+          <p className="text-xs text-red-500 mt-1">ไม่มีห้องว่างในช่วงที่เลือก</p>
         )}
       </div>
 

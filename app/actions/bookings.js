@@ -4,10 +4,44 @@ import { revalidatePath } from 'next/cache'
 import { createClient } from '@/lib/supabase-server'
 import { getTodayString } from '@/lib/dateUtils'
 
-export async function createBooking({ roomId, customerId, newCustomer, channel, checkinDate, checkoutDate, price, deposit, note, idCardUrl, vehicleRegUrl }) {
+export async function createBooking({ roomId, customerId, newCustomer, channel, checkinDate, checkoutDate, price, deposit, note, idCardUrl, vehicleRegUrl, stayType, checkinTime, checkoutTime }) {
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) return { error: 'ไม่ได้เข้าสู่ระบบ' }
+
+  const resolvedStayType = stayType || 'overnight'
+
+  // Server-side conflict check for temporary stays
+  if (resolvedStayType === 'temporary') {
+    if (!checkinTime || !checkoutTime) return { error: 'กรุณากรอกเวลาเข้าและเวลาออก' }
+    if (checkoutTime <= checkinTime) return { error: 'เวลาออกต้องหลังเวลาเข้า' }
+
+    const { data: overnightConflicts } = await supabase
+      .from('bookings')
+      .select('id')
+      .eq('room_id', roomId)
+      .eq('stay_type', 'overnight')
+      .neq('status', 'cancelled')
+      .lte('checkin_date', checkinDate)
+      .gt('checkout_date', checkinDate)
+
+    if ((overnightConflicts ?? []).length > 0) {
+      return { error: 'ห้องนี้มีผู้เข้าพักค้างคืนในวันดังกล่าว' }
+    }
+
+    const { data: tempConflicts } = await supabase
+      .from('bookings')
+      .select('checkin_time, checkout_time')
+      .eq('room_id', roomId)
+      .eq('checkin_date', checkinDate)
+      .eq('stay_type', 'temporary')
+      .neq('status', 'cancelled')
+
+    const hasTimeConflict = (tempConflicts ?? []).some(c =>
+      checkinTime < c.checkout_time && c.checkin_time < checkoutTime
+    )
+    if (hasTimeConflict) return { error: 'มีการจองชั่วคราวในช่วงเวลานี้แล้ว' }
+  }
 
   let cid = customerId
   if (!cid && newCustomer?.full_name) {
@@ -27,12 +61,15 @@ export async function createBooking({ roomId, customerId, newCustomer, channel, 
       customer_id: cid,
       channel,
       checkin_date: checkinDate,
-      checkout_date: checkoutDate,
+      checkout_date: resolvedStayType === 'temporary' ? checkinDate : checkoutDate,
       price: Number(price),
       deposit: Number(deposit) || 0,
       note,
       id_card_url: idCardUrl || null,
       vehicle_reg_url: vehicleRegUrl || null,
+      stay_type: resolvedStayType,
+      checkin_time: resolvedStayType === 'temporary' ? checkinTime : null,
+      checkout_time: resolvedStayType === 'temporary' ? checkoutTime : null,
       created_by: user.id,
     })
     .select('id')
@@ -155,6 +192,13 @@ export async function adminUpdateBooking(bookingId, fields, adminName, oldRoomNo
   const { data: profile } = await supabase.from('profiles').select('role').eq('id', user.id).single()
   if (profile?.role !== 'admin') return { error: 'ไม่มีสิทธิ์ดำเนินการนี้' }
 
+  // Fetch old booking to detect price/deposit change for transaction sync
+  const { data: oldBooking } = await supabase
+    .from('bookings')
+    .select('price, deposit')
+    .eq('id', bookingId)
+    .single()
+
   const roomChanged = oldRoomId && fields.room_id && fields.room_id !== oldRoomId
 
   // Auto-append room transfer log to note
@@ -165,20 +209,43 @@ export async function adminUpdateBooking(bookingId, fields, adminName, oldRoomNo
     note = note ? `${note}\n${logLine}` : logLine
   }
 
+  const newPrice = Number(fields.price) || 0
+  const newDeposit = Number(fields.deposit) || 0
+
   const { error } = await supabase.from('bookings').update({
     room_id: fields.room_id,
     channel: fields.channel,
     checkin_date: fields.checkin_date,
     checkout_date: fields.checkout_date,
-    price: Number(fields.price) || 0,
-    deposit: Number(fields.deposit) || 0,
+    price: newPrice,
+    deposit: newDeposit,
     status: fields.status,
     note: note || null,
     id_card_url: fields.id_card_url ?? null,
     vehicle_reg_url: fields.vehicle_reg_url ?? null,
+    stay_type: fields.stay_type ?? 'overnight',
+    checkin_time: fields.checkin_time ?? null,
+    checkout_time: fields.checkout_time ?? null,
   }).eq('id', bookingId)
 
   if (error) return { error: error.message }
+
+  // Auto-sync transaction amounts when price or deposit changes
+  if (oldBooking && (newPrice !== Number(oldBooking.price) || newDeposit !== Number(oldBooking.deposit))) {
+    if (newDeposit >= 0) {
+      await supabase.from('transactions')
+        .update({ amount: newDeposit })
+        .eq('booking_id', bookingId)
+        .eq('category', 'ค่ามัดจำ')
+    }
+    const newRemaining = newPrice - newDeposit
+    if (newRemaining >= 0) {
+      await supabase.from('transactions')
+        .update({ amount: newRemaining })
+        .eq('booking_id', bookingId)
+        .eq('category', 'ค่าห้อง')
+    }
+  }
 
   // เมื่อย้ายห้อง: ตั้งห้องเก่าเป็น dirty + บันทึก housekeeping log
   if (roomChanged) {
@@ -208,7 +275,7 @@ export async function adminDeleteBooking(bookingId) {
   const { data: profile } = await supabase.from('profiles').select('role').eq('id', user.id).single()
   if (profile?.role !== 'admin') return { error: 'ไม่มีสิทธิ์ดำเนินการนี้' }
 
-  // แอดมินลบทุก transaction ที่ผูกกับ booking นี้ (รวมที่ปิดยอดแล้ว)
+  // ลบทุก transaction ที่ผูกกับ booking นี้ (รวมที่ปิดยอดแล้ว) ก่อนลบ booking
   await supabase
     .from('transactions')
     .delete()

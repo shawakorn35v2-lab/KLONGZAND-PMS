@@ -12,25 +12,29 @@ function calcMonthOccupancy(yearNum, monthNum, rooms, bookings, todayStr) {
 
   for (let d = 1; d <= daysInMonth; d++) {
     const dateStr = `${yearNum}-${String(monthNum + 1).padStart(2, '0')}-${String(d).padStart(2, '0')}`
-    const occupied = new Set()
+    const overnightOccupied = new Set()
 
     bookings.forEach(b => {
-      if (b.checkin_date <= dateStr && b.checkout_date > dateStr) {
-        occupied.add(b.room_id)
+      if (b.stay_type === 'temporary') {
+        if (b.checkin_date === dateStr) occupiedRoomNights += 0.5
+      } else {
+        if (b.checkin_date <= dateStr && b.checkout_date > dateStr) {
+          overnightOccupied.add(b.room_id)
+        }
       }
     })
 
     rooms.forEach(r => {
       if (r.is_monthly && r.monthly_start_date && r.monthly_start_date <= dateStr) {
         if (r.monthly_end_date) {
-          if (dateStr <= r.monthly_end_date) occupied.add(r.id)
+          if (dateStr <= r.monthly_end_date) overnightOccupied.add(r.id)
         } else {
-          if (dateStr <= todayStr) occupied.add(r.id)
+          if (dateStr <= todayStr) overnightOccupied.add(r.id)
         }
       }
     })
 
-    occupiedRoomNights += occupied.size
+    occupiedRoomNights += overnightOccupied.size
   }
 
   return { daysInMonth, totalRooms, totalRoomNights, occupiedRoomNights }
