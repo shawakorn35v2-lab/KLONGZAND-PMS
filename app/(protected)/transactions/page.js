@@ -5,6 +5,7 @@ import { getTodayString } from '@/lib/dateUtils'
 export default async function TransactionsPage({ searchParams }) {
   const { dateFrom, dateTo } = await searchParams ?? {}
   const supabase = await createClient()
+  const { data: { user } } = await supabase.auth.getUser()
   const today = getTodayString()
 
   const from = dateFrom || today
@@ -15,6 +16,7 @@ export default async function TransactionsPage({ searchParams }) {
     { data: todayClosed },
     { data: allClosings },
     { data: saleItems },
+    { data: profile },
   ] = await Promise.all([
     supabase
       .from('transactions')
@@ -38,6 +40,7 @@ export default async function TransactionsPage({ searchParams }) {
       .eq('is_for_sale', true)
       .eq('is_active', true)
       .order('name'),
+    supabase.from('profiles').select('role').eq('id', user.id).single(),
   ])
 
   const txs = (transactions ?? []).map(t => ({
@@ -64,6 +67,7 @@ export default async function TransactionsPage({ searchParams }) {
         alreadyClosed={!!todayClosed}
         closedDates={(allClosings ?? []).map(c => c.closing_date)}
         saleItems={saleItems ?? []}
+        isAdmin={profile?.role === 'admin'}
       />
     </div>
   )

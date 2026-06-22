@@ -30,9 +30,14 @@ export async function createTransaction(data) {
 
 export async function deleteTransaction(id, txDate) {
   const supabase = await createClient()
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) return { error: 'ไม่ได้เข้าสู่ระบบ' }
+
+  const { data: profile } = await supabase.from('profiles').select('role').eq('id', user.id).single()
+  const isAdmin = profile?.role === 'admin'
 
   const { data: tx } = await supabase.from('transactions').select('is_closed').eq('id', id).single()
-  if (tx?.is_closed) return { error: 'ไม่สามารถลบรายการที่ปิดยอดแล้ว' }
+  if (tx?.is_closed && !isAdmin) return { error: 'ไม่สามารถลบรายการที่ปิดยอดแล้ว' }
 
   const { error } = await supabase.from('transactions').delete().eq('id', id)
   if (error) return { error: error.message }

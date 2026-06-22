@@ -22,7 +22,7 @@ const EXPORT_COLS = [
 
 export default function TransactionsClient({
   transactions, today, from, to,
-  todayIncome, todayExpense, alreadyClosed, closedDates, saleItems,
+  todayIncome, todayExpense, alreadyClosed, closedDates, saleItems, isAdmin,
 }) {
   const router = useRouter()
   const [showForm, setShowForm] = useState(false)
@@ -40,8 +40,12 @@ export default function TransactionsClient({
     router.push(`/transactions?dateFrom=${fromDate}&dateTo=${toDate}`)
   }
 
-  async function handleDelete(id, txDate) {
-    if (!confirm('ลบรายการนี้?')) return
+  async function handleDelete(id, txDate, isClosed) {
+    if (isClosed) {
+      if (!confirm('รายการนี้ปิดยอดประจำวันไปแล้ว\nยืนยันต้องการลบหรือไม่?')) return
+    } else {
+      if (!confirm('ลบรายการนี้?')) return
+    }
     setDeletingId(id)
     const result = await deleteTransaction(id, txDate)
     setDeletingId(null)
@@ -239,11 +243,11 @@ export default function TransactionsClient({
                     }
                   </td>
                   <td className="table-td">
-                    {!t.is_closed && (
+                    {(!t.is_closed || isAdmin) && (
                       <button
-                        onClick={() => handleDelete(t.id, t.tx_date)}
+                        onClick={() => handleDelete(t.id, t.tx_date, t.is_closed)}
                         disabled={deletingId === t.id}
-                        className="text-red-400 hover:text-red-600 text-xs disabled:opacity-50"
+                        className={`text-xs disabled:opacity-50 ${t.is_closed ? 'text-orange-400 hover:text-orange-600' : 'text-red-400 hover:text-red-600'}`}
                       >
                         ลบ
                       </button>
