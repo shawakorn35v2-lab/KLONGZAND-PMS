@@ -46,10 +46,11 @@ export default function BookingForm({ rooms, bookings, onClose }) {
     price: '',
     deposit: '',
     note: '',
+    vehicleReg: '',
   })
   const [customerData, setCustomerData] = useState({ existingId: null, newCustomer: null })
-  const [docFiles, setDocFiles] = useState({ idCard: null, vehicleReg: null })
-  const [docPreviews, setDocPreviews] = useState({ idCard: null, vehicleReg: null })
+  const [docFiles, setDocFiles] = useState({ idCard: null })
+  const [docPreviews, setDocPreviews] = useState({ idCard: null })
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
 
@@ -85,7 +86,7 @@ export default function BookingForm({ rooms, bookings, onClose }) {
     setLoading(true)
     try {
       const idCardUrl = docFiles.idCard ? await uploadDoc(docFiles.idCard) : null
-      const vehicleRegUrl = docFiles.vehicleReg ? await uploadDoc(docFiles.vehicleReg) : null
+      const vehicleRegUrl = form.vehicleReg.trim() || null
 
       const result = await createBooking({
         roomId: form.roomId,
@@ -170,8 +171,12 @@ export default function BookingForm({ rooms, bookings, onClose }) {
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
         <DocUpload label="รูปบัตรประชาชน (ไม่บังคับ)" preview={docPreviews.idCard}
           onChange={f => handleDocFile('idCard', f)} onClear={() => clearDoc('idCard')} />
-        <DocUpload label="รูปทะเบียนรถ (ไม่บังคับ)" preview={docPreviews.vehicleReg}
-          onChange={f => handleDocFile('vehicleReg', f)} onClear={() => clearDoc('vehicleReg')} />
+        <div>
+          <label className="label">ทะเบียนรถ (ไม่บังคับ)</label>
+          <input type="text" value={form.vehicleReg}
+            onChange={e => set('vehicleReg', e.target.value)}
+            className="input" placeholder="เช่น กข-1234 กรุงเทพมหานคร" />
+        </div>
       </div>
 
       {error && <p className="text-sm text-red-600 bg-red-50 px-3 py-2 rounded-lg">{error}</p>}

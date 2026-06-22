@@ -81,9 +81,9 @@ export default function BookingsClient({ bookings, rooms, today, role, adminName
   const [editError, setEditError] = useState('')
 
   // Doc upload state for edit modal
-  const [docSignedUrls, setDocSignedUrls] = useState({ idCard: null, vehicleReg: null })
-  const [docFiles, setDocFiles] = useState({ idCard: null, vehicleReg: null })
-  const [docPreviews, setDocPreviews] = useState({ idCard: null, vehicleReg: null })
+  const [docSignedUrls, setDocSignedUrls] = useState({ idCard: null })
+  const [docFiles, setDocFiles] = useState({ idCard: null })
+  const [docPreviews, setDocPreviews] = useState({ idCard: null })
 
   const filtered = bookings.filter(b => !statusFilter || b.status === statusFilter)
 
@@ -127,15 +127,12 @@ export default function BookingsClient({ bookings, rooms, today, role, adminName
     })
     setTransferReason('')
     setEditError('')
-    setDocFiles({ idCard: null, vehicleReg: null })
-    setDocPreviews({ idCard: null, vehicleReg: null })
-    setDocSignedUrls({ idCard: null, vehicleReg: null })
+    setDocFiles({ idCard: null })
+    setDocPreviews({ idCard: null })
+    setDocSignedUrls({ idCard: null })
 
-    const [idCardUrl, vehicleRegUrl] = await Promise.all([
-      getSignedUrl(b.id_card_url),
-      getSignedUrl(b.vehicle_reg_url),
-    ])
-    setDocSignedUrls({ idCard: idCardUrl, vehicleReg: vehicleRegUrl })
+    const idCardUrl = await getSignedUrl(b.id_card_url)
+    setDocSignedUrls({ idCard: idCardUrl })
   }
 
   function setEdit(field, value) {
@@ -151,8 +148,8 @@ export default function BookingsClient({ bookings, rooms, today, role, adminName
   function clearEditDoc(field) {
     setDocFiles(p => ({ ...p, [field]: null }))
     setDocPreviews(p => ({ ...p, [field]: null }))
-    setDocSignedUrls(p => ({ ...p, [field === 'idCard' ? 'idCard' : 'vehicleReg']: null }))
-    setEdit(field === 'idCard' ? 'id_card_url' : 'vehicle_reg_url', null)
+    setDocSignedUrls(p => ({ ...p, [field]: null }))
+    setEdit('id_card_url', null)
   }
 
   async function handleAction(action, id) {
@@ -191,13 +188,11 @@ export default function BookingsClient({ bookings, rooms, today, role, adminName
     setEditError('')
     try {
       let idCardUrl = editForm.id_card_url
-      let vehicleRegUrl = editForm.vehicle_reg_url
       if (docFiles.idCard) idCardUrl = await uploadDoc(docFiles.idCard)
-      if (docFiles.vehicleReg) vehicleRegUrl = await uploadDoc(docFiles.vehicleReg)
 
       const result = await adminUpdateBooking(
         editBooking.id,
-        { ...editForm, id_card_url: idCardUrl, vehicle_reg_url: vehicleRegUrl },
+        { ...editForm, id_card_url: idCardUrl },
         adminName, oldRoomNo, newRoomNo, editBooking.room_id, transferReason
       )
       if (result?.error) { setEditError(result.error); return }
@@ -578,14 +573,14 @@ export default function BookingsClient({ bookings, rooms, today, role, adminName
                     onChange={f => handleDocFile('idCard', f)}
                     onClear={() => clearEditDoc('idCard')}
                   />
-                  <EditDocField
-                    label="รูปทะเบียนรถ"
-                    signedUrl={docSignedUrls.vehicleReg}
-                    localPreview={docPreviews.vehicleReg}
-                    hasStored={!!editForm.vehicle_reg_url}
-                    onChange={f => handleDocFile('vehicleReg', f)}
-                    onClear={() => clearEditDoc('vehicleReg')}
-                  />
+                  <div>
+                    <p className="text-xs text-gray-500 mb-1">ทะเบียนรถ</p>
+                    <input type="text"
+                      value={editForm.vehicle_reg_url ?? ''}
+                      onChange={e => setEdit('vehicle_reg_url', e.target.value || null)}
+                      className="input"
+                      placeholder="เช่น กข-1234 กรุงเทพมหานคร" />
+                  </div>
                 </div>
               </div>
 
