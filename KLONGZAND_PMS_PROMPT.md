@@ -37,7 +37,7 @@
 - สร้าง `middleware.js` ป้องกันทุก route ยกเว้น `/login` — ถ้ายังไม่ login ให้ redirect ไป `/login`
 - ดึง `role` จากตาราง `profiles` ของผู้ใช้ที่ login:
   - **admin**: เข้าถึงได้ทุกหน้า ทุกฟีเจอร์ รวมรายงานการเงินทั้งหมด
-  - **staff**: เข้าถึงหน้าจองห้อง, ลูกค้า, กรอกรายรับ-รายจ่ายประจำวัน, ทำความสะอาดห้องได้ แต่**ดูรายงานสรุปการเงินรวม/Dashboard เชิงลึกไม่ได้** (ซ่อนหรือ disable เมนูเหล่านั้น)
+  - **staff**: เข้าถึงหน้าจองห้อง, ลูกค้า, กรอกรายรับ-รายจ่ายประจำวัน, ทำความสะอาดห้องได้ แต่**ดูรายงานสรุปการเงินรวม/Dashboard เชิงลึกไม่ได้** (ซ่อนหรือ disable เมนูเหล่านั้น); **staff โยกห้อง (แก้ไขการจอง/เปลี่ยนห้อง) ได้** แต่ลบการจองไม่ได้
 - มีปุ่ม Logout ใน layout หลัก
 
 ## 5. หน้าเว็บที่ต้องสร้าง
@@ -66,8 +66,9 @@
 - **กรองช่วงวันที่** ในรายการจอง (dateFrom/dateTo กรอง checkin_date ที่ server)
 - ปุ่มเช็คอิน / เช็คเอาท์ เปลี่ยนสถานะ booking และอัปเดตสถานะห้อง (housekeeping_status เป็น 'dirty' หลังเช็คเอาท์)
 - เมื่อเช็คอิน/ยืนยันชำระเงิน ให้สร้างรายการใน `transactions` (tx_type='income') อัตโนมัติ ผูกกับ `booking_id`
-- **Admin แก้ราคา/มัดจำ**: `adminUpdateBooking` อัปเดต transaction amounts อัตโนมัติ (ค่ามัดจำ = deposit ใหม่, ค่าห้อง = price - deposit ใหม่) — ป้องกัน A2-style desync
+- **Admin/Staff แก้ราคา/มัดจำ/โยกห้อง**: `adminUpdateBooking` (`app/actions/bookings.js`) อนุญาต role 'admin' และ 'staff' — อัปเดต transaction amounts อัตโนมัติ (ค่ามัดจำ = deposit ใหม่, ค่าห้อง = price - deposit ใหม่) — ป้องกัน A2-style desync; staff เห็นปุ่ม ✏ แก้ไข แต่ไม่เห็นปุ่ม 🗑 ลบ
 - **Admin ลบการจอง**: ลบ transactions ทั้งหมด (รวมปิดยอด) ก่อนลบ booking พร้อม popup เตือนเมื่อมี closed transactions
+- **checkin_time/checkout_time**: ฟิลด์ type `time` ใน DB — ต้องส่งเป็น `null` (ไม่ใช่ `""`) สำหรับ stay_type='overnight'; `openEdit` ใน BookingsClient.js initialize ด้วย `?? null`; server action ใช้ `stay_type === 'temporary' ? (value || null) : null` เป็น guard
 
 ### `/customers` (ลูกค้า + ประวัติ)
 - รายชื่อลูกค้าทั้งหมด ค้นหาได้ด้วยชื่อ/เบอร์โทร
@@ -110,7 +111,7 @@
 - ทุกหน้าต้อง build ผ่านด้วย `next build` ไม่มี error
 - UI ทั้งหมด responsive รองรับมือถือ (md: breakpoint สำหรับ sidebar)
 
-## 8. สถานะที่สร้างแล้ว (อัปเดต 2026-06-21)
+## 8. สถานะที่สร้างแล้ว (อัปเดต 2026-06-24)
 หน้าและฟีเจอร์ที่สร้างเสร็จแล้วในโปรเจกต์นี้:
 - ✅ `/login` — Supabase Auth login
 - ✅ `/dashboard` — สรุปยอดวันนี้/เดือนนี้, RoomGrid, กราฟ recharts, Export Excel/PDF, ภาพรวมสะสมทั้งหมด (all-time income/expense/net/booking count), Occupancy เรียลไทม์ (date-based: checkin_date ≤ today < checkout_date หรือ is_monthly room), Occupancy รายเดือน (dropdown เลือกเดือน, แสดงห้อง-คืน, คำนวณจาก bookings + monthly rooms ทุกวันในเดือน), กราฟอัตราเข้าพักรายเดือน 12 เดือน (BarChart)

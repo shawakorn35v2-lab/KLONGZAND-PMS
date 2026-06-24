@@ -190,7 +190,7 @@ export async function adminUpdateBooking(bookingId, fields, adminName, oldRoomNo
   if (!user) return { error: 'ไม่ได้เข้าสู่ระบบ' }
 
   const { data: profile } = await supabase.from('profiles').select('role').eq('id', user.id).single()
-  if (profile?.role !== 'admin') return { error: 'ไม่มีสิทธิ์ดำเนินการนี้' }
+  if (!['admin', 'staff'].includes(profile?.role)) return { error: 'ไม่มีสิทธิ์ดำเนินการนี้' }
 
   // Fetch old booking to detect price/deposit change for transaction sync
   const { data: oldBooking } = await supabase
@@ -224,8 +224,8 @@ export async function adminUpdateBooking(bookingId, fields, adminName, oldRoomNo
     id_card_url: fields.id_card_url ?? null,
     vehicle_reg_url: fields.vehicle_reg_url ?? null,
     stay_type: fields.stay_type ?? 'overnight',
-    checkin_time: fields.checkin_time ?? null,
-    checkout_time: fields.checkout_time ?? null,
+    checkin_time: fields.stay_type === 'temporary' ? (fields.checkin_time || null) : null,
+    checkout_time: fields.stay_type === 'temporary' ? (fields.checkout_time || null) : null,
   }).eq('id', bookingId)
 
   if (error) return { error: error.message }

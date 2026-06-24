@@ -70,6 +70,7 @@ async function getSignedUrl(path) {
 export default function BookingsClient({ bookings, rooms, today, role, adminName, dateFrom, dateTo }) {
   const router = useRouter()
   const isAdmin = role === 'admin'
+  const canEdit = role === 'admin' || role === 'staff'
 
   const [showForm, setShowForm] = useState(false)
   const [statusFilter, setStatusFilter] = useState('')
@@ -170,8 +171,8 @@ export default function BookingsClient({ bookings, rooms, today, role, adminName
       id_card_url: b.id_card_url ?? null,
       vehicle_reg_url: b.vehicle_reg_url ?? null,
       stay_type: b.stay_type ?? 'overnight',
-      checkin_time: b.checkin_time ?? '',
-      checkout_time: b.checkout_time ?? '',
+      checkin_time: b.checkin_time ?? null,
+      checkout_time: b.checkout_time ?? null,
     })
     setTransferReason('')
     setEditError('')
@@ -516,17 +517,17 @@ export default function BookingsClient({ bookings, rooms, today, role, adminName
                           ยกเลิก
                         </button>
                       )}
+                      {canEdit && (
+                        <button onClick={() => openEdit(b)} disabled={loadingId === b.id}
+                          className="px-2.5 py-1 text-xs bg-amber-500 text-white rounded hover:bg-amber-600 disabled:opacity-50">
+                          ✏ แก้ไข
+                        </button>
+                      )}
                       {isAdmin && (
-                        <>
-                          <button onClick={() => openEdit(b)} disabled={loadingId === b.id}
-                            className="px-2.5 py-1 text-xs bg-amber-500 text-white rounded hover:bg-amber-600 disabled:opacity-50">
-                            ✏ แก้ไข
-                          </button>
-                          <button onClick={() => handleDelete(b)} disabled={loadingId === b.id}
-                            className="px-2.5 py-1 text-xs bg-red-600 text-white rounded hover:bg-red-700 disabled:opacity-50">
-                            🗑 ลบ
-                          </button>
-                        </>
+                        <button onClick={() => handleDelete(b)} disabled={loadingId === b.id}
+                          className="px-2.5 py-1 text-xs bg-red-600 text-white rounded hover:bg-red-700 disabled:opacity-50">
+                          🗑 ลบ
+                        </button>
                       )}
                       {b.note && <span title={b.note} className="text-gray-400 cursor-help">📝</span>}
                       {(b.id_card_url || b.vehicle_reg_url) && (
