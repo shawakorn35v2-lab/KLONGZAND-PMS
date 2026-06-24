@@ -40,8 +40,14 @@ export default function TransactionsClient({
     router.push(`/transactions?dateFrom=${fromDate}&dateTo=${toDate}`)
   }
 
-  async function handleDelete(id, txDate, isClosed) {
-    if (isClosed) {
+  async function handleDelete(id, txDate, isClosed, category) {
+    const isSale = category === 'ขายของ'
+    if (isSale) {
+      const msg = isClosed
+        ? 'รายการนี้เป็นการขายของและปิดยอดไปแล้ว\nลบแล้วสต๊อกจะถูกคืนกลับให้อัตโนมัติ\nยืนยันลบหรือไม่?'
+        : 'รายการนี้เป็นการขายของ\nลบแล้วสต๊อกจะถูกคืนกลับให้อัตโนมัติ\nยืนยันลบหรือไม่?'
+      if (!confirm(msg)) return
+    } else if (isClosed) {
       if (!confirm('รายการนี้ปิดยอดประจำวันไปแล้ว\nยืนยันต้องการลบหรือไม่?')) return
     } else {
       if (!confirm('ลบรายการนี้?')) return
@@ -245,7 +251,7 @@ export default function TransactionsClient({
                   <td className="table-td">
                     {(!t.is_closed || isAdmin) && (
                       <button
-                        onClick={() => handleDelete(t.id, t.tx_date, t.is_closed)}
+                        onClick={() => handleDelete(t.id, t.tx_date, t.is_closed, t.category)}
                         disabled={deletingId === t.id}
                         className={`text-xs disabled:opacity-50 ${t.is_closed ? 'text-orange-400 hover:text-orange-600' : 'text-red-400 hover:text-red-600'}`}
                       >
