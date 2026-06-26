@@ -224,11 +224,17 @@ export default function BookingForm({ rooms, bookings, onClose }) {
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
         <div>
           <label className="label">ราคารวม (บาท)</label>
-          <input type="number" min="0" step="0.01" value={form.price} onChange={e => set('price', e.target.value)} className="input" placeholder="0.00" />
+          <input type="number" min="0" step="0.01" value={form.price}
+            onChange={e => set('price', e.target.value)}
+            onWheel={e => e.currentTarget.blur()}
+            className="input" placeholder="0.00" />
         </div>
         <div>
           <label className="label">มัดจำ (บาท)</label>
-          <input type="number" min="0" step="0.01" value={form.deposit} onChange={e => set('deposit', e.target.value)} className="input" placeholder="0.00" />
+          <input type="number" min="0" step="0.01" value={form.deposit}
+            onChange={e => set('deposit', e.target.value)}
+            onWheel={e => e.currentTarget.blur()}
+            className="input" placeholder="0.00" />
         </div>
       </div>
 

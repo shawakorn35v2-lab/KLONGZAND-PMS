@@ -3,6 +3,7 @@
 import { revalidatePath } from 'next/cache'
 import { createClient } from '@/lib/supabase-server'
 import { getTodayString } from '@/lib/dateUtils'
+import { roundCurrency } from '@/lib/currency'
 
 export async function createBooking({ roomId, customerId, newCustomer, channel, checkinDate, checkoutDate, price, deposit, note, idCardUrl, vehicleRegUrl, stayType, checkinTime, checkoutTime }) {
   const supabase = await createClient()
@@ -54,6 +55,9 @@ export async function createBooking({ roomId, customerId, newCustomer, channel, 
     cid = data.id
   }
 
+  const roundedPrice = roundCurrency(price)
+  const roundedDeposit = roundCurrency(deposit)
+
   const { data: booking, error: bookingErr } = await supabase
     .from('bookings')
     .insert({
@@ -62,8 +66,8 @@ export async function createBooking({ roomId, customerId, newCustomer, channel, 
       channel,
       checkin_date: checkinDate,
       checkout_date: resolvedStayType === 'temporary' ? checkinDate : checkoutDate,
-      price: Number(price),
-      deposit: Number(deposit) || 0,
+      price: roundedPrice,
+      deposit: roundedDeposit,
       note,
       id_card_url: idCardUrl || null,
       vehicle_reg_url: vehicleRegUrl || null,
@@ -77,14 +81,14 @@ export async function createBooking({ roomId, customerId, newCustomer, channel, 
 
   if (bookingErr) return { error: bookingErr.message }
 
-  if (Number(deposit) > 0) {
+  if (roundedDeposit > 0) {
     const { data: roomData } = await supabase.from('rooms').select('room_no').eq('id', roomId).single()
     const roomNo = roomData?.room_no ?? ''
     await supabase.from('transactions').insert({
       tx_date: checkinDate,
       tx_type: 'income',
       category: 'ค่ามัดจำ',
-      amount: Number(deposit),
+      amount: roundedDeposit,
       note: roomNo ? `มัดจำการจองห้อง ห้อง ${roomNo}` : `มัดจำการจองห้อง`,
       booking_id: booking.id,
       created_by: user.id,
@@ -114,7 +118,7 @@ export async function checkinBooking(bookingId) {
     .eq('id', bookingId)
   if (error) return { error: error.message }
 
-  const remaining = Number(booking.price) - Number(booking.deposit)
+  const remaining = roundCurrency(Number(booking.price) - Number(booking.deposit))
   if (remaining > 0) {
     const roomNo = booking.rooms?.room_no ?? ''
     await supabase.from('transactions').insert({
@@ -209,8 +213,8 @@ export async function adminUpdateBooking(bookingId, fields, adminName, oldRoomNo
     note = note ? `${note}\n${logLine}` : logLine
   }
 
-  const newPrice = Number(fields.price) || 0
-  const newDeposit = Number(fields.deposit) || 0
+  const newPrice = roundCurrency(fields.price)
+  const newDeposit = roundCurrency(fields.deposit)
 
   const { error } = await supabase.from('bookings').update({
     room_id: fields.room_id,
@@ -238,7 +242,7 @@ export async function adminUpdateBooking(bookingId, fields, adminName, oldRoomNo
         .eq('booking_id', bookingId)
         .eq('category', 'ค่ามัดจำ')
     }
-    const newRemaining = newPrice - newDeposit
+    const newRemaining = roundCurrency(newPrice - newDeposit)
     if (newRemaining >= 0) {
       await supabase.from('transactions')
         .update({ amount: newRemaining })

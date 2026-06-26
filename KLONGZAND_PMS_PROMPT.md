@@ -125,3 +125,6 @@
 - ✅ Sidebar responsive, hamburger menu บนมือถือ
 - ✅ ทุกหน้า responsive (p-4 md:p-6, grid-cols-1 sm:grid-cols-X)
 - ✅ `lib/dateUtils.js` — utility กลาง: formatDate (DD/MM/พ.ศ.), formatMonth, formatShortDate, formatLongDate, formatDateTime (timestamp + เวลา ไทม์โซน Asia/Bangkok), getTodayString (local timezone safe)
+- ✅ `lib/currency.js` — `roundCurrency(value)` ปัดเศษเงินเป็น 2 ตำแหน่งแบบกัน floating-point error (`Math.round((n + Number.EPSILON) * 100) / 100`); ใช้ทุกจุดที่เขียน price/deposit ลง `bookings` และคำนวณ remaining/transaction amount (`createBooking`, `checkinBooking`, `adminUpdateBooking` ใน `app/actions/bookings.js`) กันราคา 300 → 299.99 จาก FP noise
+- ✅ ฟอร์ม number input ของราคา/มัดจำ (BookingForm + edit modal ใน BookingsClient) เพิ่ม `onWheel={e => e.currentTarget.blur()}` กันลูกกลิ้งเมาส์เปลี่ยนค่าโดยไม่ตั้งใจ (step="0.01" + scroll = ลด 0.01 อัตโนมัติ)
+- ✅ `supabase_audit_temp_price.sql` — query แบบอ่านอย่างเดียว นับ/list รายการ stay_type='temporary' ที่ price/deposit ลงท้ายด้วย .99/.98/.01/.02 (น่าจะตั้งใจเป็น .00) สำหรับตรวจสอบข้อมูลเก่าก่อนแก้ไขด้วยตัวเอง

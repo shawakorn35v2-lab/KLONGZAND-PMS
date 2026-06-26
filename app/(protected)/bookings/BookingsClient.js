@@ -656,12 +656,16 @@ export default function BookingsClient({ bookings, rooms, today, role, adminName
                 <div>
                   <label className="label">ราคารวม (บาท)</label>
                   <input type="number" min="0" step="0.01" value={editForm.price}
-                    onChange={e => setEdit('price', e.target.value)} className="input" />
+                    onChange={e => setEdit('price', e.target.value)}
+                    onWheel={e => e.currentTarget.blur()}
+                    className="input" />
                 </div>
                 <div>
                   <label className="label">มัดจำ (บาท)</label>
                   <input type="number" min="0" step="0.01" value={editForm.deposit}
-                    onChange={e => setEdit('deposit', e.target.value)} className="input" />
+                    onChange={e => setEdit('deposit', e.target.value)}
+                    onWheel={e => e.currentTarget.blur()}
+                    className="input" />
                 </div>
               </div>
 
