@@ -142,8 +142,14 @@ export default function InventoryClient({ items, movements, requests, rooms, rol
   async function handleSell(e) {
     e.preventDefault()
     setSellError('')
-    if (!sellForm.quantity || Number(sellForm.quantity) <= 0) { setSellError('กรุณากรอกจำนวน'); return }
+    const qty = Number(sellForm.quantity)
+    if (!sellForm.quantity || qty <= 0) { setSellError('กรุณากรอกจำนวน'); return }
     if (sellOverStock) { setSellError(`สต๊อกไม่พอ — มีอยู่ ${formatNum(sellModal.current_stock)} ${sellModal.unit}`); return }
+    // กันเคส "พิมพ์ 2 แต่กลายเป็น 0.02" — จำนวนต่ำกว่า 1 ต้องยืนยันก่อน
+    if (qty < 1) {
+      const total = Number(sellModal.sale_price || 0) * qty
+      if (!confirm(`จำนวนที่กรอกคือ ${qty} ${sellModal.unit} (ยอดรวม ${total.toFixed(2)} บาท) ดูน้อยผิดปกติ ยืนยันบันทึก?`)) return
+    }
     setSellLoading(true)
     const result = await sellItem({ item_id: sellModal.id, quantity: sellForm.quantity, note: sellForm.note })
     setSellLoading(false)
@@ -428,7 +434,7 @@ export default function InventoryClient({ items, movements, requests, rooms, rol
               <div className="grid grid-cols-2 gap-3">
                 <div>
                   <label className="label">จำนวน *</label>
-                  <input type="number" required min="0.01" step="0.01" value={inForm.quantity} onChange={e => setInForm(p => ({ ...p, quantity: e.target.value }))} className="input" placeholder="0" />
+                  <input type="number" required min="1" step="1" inputMode="numeric" value={inForm.quantity} onChange={e => setInForm(p => ({ ...p, quantity: e.target.value }))} onWheel={e => e.currentTarget.blur()} className="input" placeholder="0" />
                 </div>
                 <div>
                   <label className="label">ราคา/หน่วย (บาท)</label>
@@ -460,8 +466,9 @@ export default function InventoryClient({ items, movements, requests, rooms, rol
               </div>
               <div>
                 <label className="label">จำนวน *</label>
-                <input type="number" required min="0.01" step="0.01" value={outForm.quantity}
+                <input type="number" required min="1" step="1" inputMode="numeric" value={outForm.quantity}
                   onChange={e => setOutForm(p => ({ ...p, quantity: e.target.value }))}
+                  onWheel={e => e.currentTarget.blur()}
                   className={`input ${outOverStock ? 'border-red-400 bg-red-50' : ''}`} placeholder="0" />
                 {outOverStock && <p className="text-xs text-red-600 mt-1">⚠ เกินสต๊อก — มีอยู่ {formatNum(selectedOutItem.current_stock)} {selectedOutItem.unit}</p>}
               </div>
@@ -755,9 +762,10 @@ export default function InventoryClient({ items, movements, requests, rooms, rol
               <div className="grid grid-cols-2 gap-3">
                 <div>
                   <label className="label">จำนวนที่รับเข้า *</label>
-                  <input type="number" required min="0.01" step="0.01"
+                  <input type="number" required min="1" step="1" inputMode="numeric"
                     value={saleStockInForm.quantity}
                     onChange={e => setSaleStockInForm(p => ({ ...p, quantity: e.target.value }))}
+                    onWheel={e => e.currentTarget.blur()}
                     className="input" placeholder="0" autoFocus />
                 </div>
                 <div>
@@ -863,9 +871,10 @@ export default function InventoryClient({ items, movements, requests, rooms, rol
             <form onSubmit={handleSell} className="space-y-3">
               <div>
                 <label className="label">จำนวนที่ขาย *</label>
-                <input type="number" required min="0.01" step="0.01"
+                <input type="number" required min="1" step="1" inputMode="numeric"
                   value={sellForm.quantity}
                   onChange={e => setSellForm(p => ({ ...p, quantity: e.target.value }))}
+                  onWheel={e => e.currentTarget.blur()}
                   className={`input ${sellOverStock ? 'border-red-400 bg-red-50' : ''}`}
                   placeholder="0" autoFocus />
                 {sellOverStock && (
