@@ -339,7 +339,7 @@ export default function InventoryClient({ items, movements, requests, rooms, rol
                   </div>
                   <div>
                     <label className="label">จุดเตือนสต๊อก</label>
-                    <input type="number" min="0" value={itemForm.reorder_point} onChange={e => setItemForm(p => ({ ...p, reorder_point: e.target.value }))} className="input" placeholder="0" />
+                    <input type="number" min="0" value={itemForm.reorder_point} onChange={e => setItemForm(p => ({ ...p, reorder_point: e.target.value }))} onWheel={e => e.currentTarget.blur()} className="input" placeholder="0" />
                   </div>
                 </div>
                 {itemError && <p className="text-sm text-red-600">{itemError}</p>}
@@ -438,7 +438,7 @@ export default function InventoryClient({ items, movements, requests, rooms, rol
                 </div>
                 <div>
                   <label className="label">ราคา/หน่วย (บาท)</label>
-                  <input type="number" min="0" step="0.01" value={inForm.unit_cost} onChange={e => setInForm(p => ({ ...p, unit_cost: e.target.value }))} className="input" placeholder="0.00" />
+                  <input type="number" min="0" step="0.01" value={inForm.unit_cost} onChange={e => setInForm(p => ({ ...p, unit_cost: e.target.value }))} onWheel={e => e.currentTarget.blur()} className="input" placeholder="0.00" />
                 </div>
               </div>
               <div>
@@ -524,6 +524,7 @@ export default function InventoryClient({ items, movements, requests, rooms, rol
                     <label className="label">ราคาขาย/หน่วย (บาท) *</label>
                     <input type="number" required min="0.01" step="0.01" value={saleItemForm.sale_price}
                       onChange={e => setSaleItemForm(p => ({ ...p, sale_price: e.target.value }))}
+                      onWheel={e => e.currentTarget.blur()}
                       className="input" placeholder="0.00" />
                   </div>
                 </div>
@@ -608,7 +609,7 @@ export default function InventoryClient({ items, movements, requests, rooms, rol
               </div>
               <div>
                 <label className="label">จำนวนที่ขอ *</label>
-                <input type="number" required min="1" step="1" value={reqForm.requested_qty} onChange={e => setReqForm(p => ({ ...p, requested_qty: e.target.value }))} className="input" placeholder="0" />
+                <input type="number" required min="1" step="1" inputMode="numeric" value={reqForm.requested_qty} onChange={e => setReqForm(p => ({ ...p, requested_qty: e.target.value }))} onWheel={e => e.currentTarget.blur()} className="input" placeholder="0" />
               </div>
               <div>
                 <label className="label">หมายเหตุ</label>
@@ -773,6 +774,7 @@ export default function InventoryClient({ items, movements, requests, rooms, rol
                   <input type="number" min="0" step="0.01"
                     value={saleStockInForm.unit_cost}
                     onChange={e => setSaleStockInForm(p => ({ ...p, unit_cost: e.target.value }))}
+                    onWheel={e => e.currentTarget.blur()}
                     className="input" placeholder="0.00" />
                 </div>
               </div>
@@ -837,6 +839,7 @@ export default function InventoryClient({ items, movements, requests, rooms, rol
                   <input type="number" required min="0.01" step="0.01"
                     value={editItemForm.sale_price}
                     onChange={e => setEditItemForm(p => ({ ...p, sale_price: e.target.value }))}
+                    onWheel={e => e.currentTarget.blur()}
                     className="input" placeholder="0.00" autoFocus />
                 </div>
               )}

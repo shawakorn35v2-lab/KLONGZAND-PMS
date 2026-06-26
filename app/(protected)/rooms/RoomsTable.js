@@ -37,6 +37,7 @@ function EditableCell({ value, onSave, type = 'text', options }) {
         value={val}
         onChange={e => setVal(e.target.value)}
         onBlur={save}
+        onWheel={e => e.currentTarget.blur()}
         onKeyDown={e => { if (e.key === 'Enter') save(); if (e.key === 'Escape') setEditing(false) }}
         autoFocus
         className="border border-blue-400 rounded px-2 py-1 text-sm w-full"

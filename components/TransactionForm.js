@@ -93,6 +93,7 @@ export default function TransactionForm({ onClose }) {
           step="0.01"
           value={form.amount}
           onChange={e => set('amount', e.target.value)}
+          onWheel={e => e.currentTarget.blur()}
           className="input"
           placeholder="0.00"
         />

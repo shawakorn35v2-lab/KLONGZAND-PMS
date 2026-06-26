@@ -67,22 +67,22 @@ export default function MeterForm({ roomId }) {
       <div className="grid grid-cols-2 gap-3">
         <div>
           <label className="label">มิเตอร์ก่อนหน้า (หน่วย)</label>
-          <input type="number" min="0" step="0.01" required value={form.prev_reading} onChange={e => set('prev_reading', e.target.value)} className="input" placeholder="0.00" />
+          <input type="number" min="0" step="0.01" required value={form.prev_reading} onChange={e => set('prev_reading', e.target.value)} onWheel={e => e.currentTarget.blur()} className="input" placeholder="0.00" />
         </div>
         <div>
           <label className="label">มิเตอร์ปัจจุบัน (หน่วย)</label>
-          <input type="number" min="0" step="0.01" required value={form.curr_reading} onChange={e => set('curr_reading', e.target.value)} className="input" placeholder="0.00" />
+          <input type="number" min="0" step="0.01" required value={form.curr_reading} onChange={e => set('curr_reading', e.target.value)} onWheel={e => e.currentTarget.blur()} className="input" placeholder="0.00" />
         </div>
       </div>
 
       <div className="grid grid-cols-2 gap-3">
         <div>
           <label className="label">ราคาต่อหน่วย (บาท)</label>
-          <input type="number" min="0" step="0.01" required value={form.unit_price} onChange={e => set('unit_price', e.target.value)} className="input" />
+          <input type="number" min="0" step="0.01" required value={form.unit_price} onChange={e => set('unit_price', e.target.value)} onWheel={e => e.currentTarget.blur()} className="input" />
         </div>
         <div>
           <label className="label">ค่าน้ำเหมา (บาท)</label>
-          <input type="number" min="0" step="0.01" value={form.water_flat_fee} onChange={e => set('water_flat_fee', e.target.value)} className="input" placeholder="0.00" />
+          <input type="number" min="0" step="0.01" value={form.water_flat_fee} onChange={e => set('water_flat_fee', e.target.value)} onWheel={e => e.currentTarget.blur()} className="input" placeholder="0.00" />
         </div>
       </div>
 

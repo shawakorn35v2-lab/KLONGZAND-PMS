@@ -162,9 +162,10 @@ export default function TransactionsClient({
             </div>
             <div>
               <label className="label">จำนวนที่ขาย *</label>
-              <input type="number" required min="0.01" step="0.01"
+              <input type="number" required min="1" step="1" inputMode="numeric"
                 value={sellForm.quantity}
                 onChange={e => setSellForm(p => ({ ...p, quantity: e.target.value }))}
+                onWheel={e => e.currentTarget.blur()}
                 className={`input ${sellOverStock ? 'border-red-400 bg-red-50' : ''}`}
                 placeholder="0" />
               {sellOverStock && (

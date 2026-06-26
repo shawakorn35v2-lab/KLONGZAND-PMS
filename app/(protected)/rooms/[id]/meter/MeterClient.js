@@ -168,6 +168,7 @@ export default function MeterClient({ readings, room }) {
               type="number" min="0" step="0.01"
               value={rentVal}
               onChange={e => setRentVal(e.target.value)}
+              onWheel={e => e.currentTarget.blur()}
               className="input max-w-[140px] text-sm"
             />
             <button onClick={handleSaveRent} disabled={rentLoading} className="btn-primary text-xs py-1.5">
@@ -251,6 +252,7 @@ export default function MeterClient({ readings, room }) {
                   <input type="number" min="0" step="0.01" required
                     value={editForm.prev_reading}
                     onChange={e => setEditForm(p => ({ ...p, prev_reading: e.target.value }))}
+                    onWheel={e => e.currentTarget.blur()}
                     className="input" />
                 </div>
                 <div>
@@ -258,6 +260,7 @@ export default function MeterClient({ readings, room }) {
                   <input type="number" min="0" step="0.01" required
                     value={editForm.curr_reading}
                     onChange={e => setEditForm(p => ({ ...p, curr_reading: e.target.value }))}
+                    onWheel={e => e.currentTarget.blur()}
                     className="input" />
                 </div>
               </div>
@@ -267,6 +270,7 @@ export default function MeterClient({ readings, room }) {
                   <input type="number" min="0" step="0.01" required
                     value={editForm.unit_price}
                     onChange={e => setEditForm(p => ({ ...p, unit_price: e.target.value }))}
+                    onWheel={e => e.currentTarget.blur()}
                     className="input" />
                 </div>
                 <div>
@@ -274,6 +278,7 @@ export default function MeterClient({ readings, room }) {
                   <input type="number" min="0" step="0.01"
                     value={editForm.water_flat_fee}
                     onChange={e => setEditForm(p => ({ ...p, water_flat_fee: e.target.value }))}
+                    onWheel={e => e.currentTarget.blur()}
                     className="input" />
                 </div>
               </div>
@@ -342,6 +347,7 @@ export default function MeterClient({ readings, room }) {
                     <input type="text" value={d.desc} onChange={e => setDeductions(p => p.map((x, idx) => idx === i ? { ...x, desc: e.target.value } : x))}
                       placeholder="รายการ เช่น ของใช้ชำรุด" className="input flex-1 text-sm" />
                     <input type="number" min="0" step="0.01" value={d.amount} onChange={e => setDeductions(p => p.map((x, idx) => idx === i ? { ...x, amount: e.target.value } : x))}
+                      onWheel={e => e.currentTarget.blur()}
                       placeholder="0.00" className="input w-28 text-sm text-right" />
                     {deductions.length > 1 && (
                       <button onClick={() => setDeductions(p => p.filter((_, idx) => idx !== i))} className="text-red-400 hover:text-red-600 text-lg leading-none">×</button>
