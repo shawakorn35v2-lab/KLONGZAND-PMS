@@ -7,7 +7,7 @@ module.exports = {
   theme: {
     extend: {
       fontFamily: {
-        sans: ['Sarabun', 'system-ui', '-apple-system', 'sans-serif'],
+        sans: ['var(--font-mali)', 'system-ui', '-apple-system', 'sans-serif'],
       },
     },
   },
