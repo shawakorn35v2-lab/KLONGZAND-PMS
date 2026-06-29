@@ -1,6 +1,7 @@
 'use client'
 
 import { useState } from 'react'
+import Image from 'next/image'
 import Sidebar from './Sidebar'
 
 export default function LayoutShell({ user, children }) {
@@ -21,7 +22,16 @@ export default function LayoutShell({ user, children }) {
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" />
             </svg>
           </button>
-          <span className="font-bold text-gray-900 text-sm">🏖️ KLONGZAND PMS</span>
+          <div className="flex items-center gap-2">
+            <Image
+              src="/logo-icon.png"
+              alt="KLONGZAND PMS"
+              width={28}
+              height={28}
+              className="rounded"
+            />
+            <span className="font-bold text-gray-900 text-sm">KLONGZAND PMS</span>
+          </div>
         </header>
         <main className="flex-1 overflow-y-auto">
           {children}

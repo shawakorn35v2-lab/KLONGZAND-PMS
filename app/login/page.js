@@ -1,6 +1,7 @@
 'use client'
 
 import { useState } from 'react'
+import Image from 'next/image'
 import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase-browser'
 
@@ -34,10 +35,15 @@ export default function LoginPage() {
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-900 to-blue-700 flex items-center justify-center p-4">
       <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md p-8">
-        <div className="text-center mb-8">
-          <div className="text-4xl mb-3">🏖️</div>
-          <h1 className="text-2xl font-bold text-gray-900">KLONGZAND PMS</h1>
-          <p className="text-sm text-gray-500 mt-1">ระบบจัดการรีสอร์ท</p>
+        <div className="flex justify-center mb-8">
+          <Image
+            src="/logo-full.png"
+            alt="KLONGZAND PMS"
+            width={280}
+            height={280}
+            priority
+            className="h-auto w-auto max-w-[240px]"
+          />
         </div>
 
         <form onSubmit={handleLogin} className="space-y-5">

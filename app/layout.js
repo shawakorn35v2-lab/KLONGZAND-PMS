@@ -11,6 +11,7 @@ const mali = Mali({
 export const metadata = {
   title: 'KLONGZAND PMS',
   description: 'ระบบจัดการรีสอร์ท KLONGZAND',
+  icons: { icon: '/logo-icon.png' },
 }
 
 export default function RootLayout({ children }) {

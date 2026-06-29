@@ -1,5 +1,6 @@
 'use client'
 
+import Image from 'next/image'
 import Link from 'next/link'
 import { usePathname, useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase-browser'
@@ -46,7 +47,13 @@ export default function Sidebar({ user, isOpen, onClose }) {
       `}>
         <div className="px-6 py-5 border-b border-gray-200 flex items-center justify-between">
           <div className="flex items-center gap-3">
-            <span className="text-2xl">🏖️</span>
+            <Image
+              src="/logo-icon.png"
+              alt="KLONGZAND PMS"
+              width={40}
+              height={40}
+              className="rounded-lg"
+            />
             <div>
               <p className="font-bold text-gray-900 text-sm leading-tight">KLONGZAND</p>
               <p className="text-xs text-gray-500">PMS</p>
