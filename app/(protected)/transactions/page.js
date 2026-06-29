@@ -11,19 +11,28 @@ export default async function TransactionsPage({ searchParams }) {
   const from = dateFrom || today
   const to = dateTo || today
 
+  const { data: profile } = await supabase
+    .from('profiles')
+    .select('role')
+    .eq('id', user.id)
+    .single()
+  const isAdmin = profile?.role === 'admin'
+
+  let txQuery = supabase
+    .from('transactions')
+    .select('*, bookings(room_id, rooms(room_no))')
+    .gte('tx_date', from)
+    .lte('tx_date', to)
+    .order('created_at', { ascending: false })
+  if (!isAdmin) txQuery = txQuery.eq('created_by', user.id)
+
   const [
     { data: transactions },
     { data: todayClosed },
     { data: allClosings },
     { data: saleItems },
-    { data: profile },
   ] = await Promise.all([
-    supabase
-      .from('transactions')
-      .select('*, bookings(room_id, rooms(room_no))')
-      .gte('tx_date', from)
-      .lte('tx_date', to)
-      .order('created_at', { ascending: false }),
+    txQuery,
     supabase
       .from('daily_closings')
       .select('id')
@@ -40,7 +49,6 @@ export default async function TransactionsPage({ searchParams }) {
       .eq('is_for_sale', true)
       .eq('is_active', true)
       .order('name'),
-    supabase.from('profiles').select('role').eq('id', user.id).single(),
   ])
 
   const txs = (transactions ?? []).map(t => ({
@@ -67,7 +75,7 @@ export default async function TransactionsPage({ searchParams }) {
         alreadyClosed={!!todayClosed}
         closedDates={(allClosings ?? []).map(c => c.closing_date)}
         saleItems={saleItems ?? []}
-        isAdmin={profile?.role === 'admin'}
+        isAdmin={isAdmin}
       />
     </div>
   )

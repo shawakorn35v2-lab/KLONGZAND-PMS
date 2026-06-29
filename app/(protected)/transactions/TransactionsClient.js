@@ -206,11 +206,13 @@ export default function TransactionsClient({
             รีเซ็ต
           </button>
         </div>
-        <div className="mt-3 flex flex-wrap gap-4 text-sm">
-          <span>รายรับรวม: <strong className="text-green-600">{formatCurrency(totalIncome)}</strong></span>
-          <span>รายจ่ายรวม: <strong className="text-red-600">{formatCurrency(totalExpense)}</strong></span>
-          <span>กำไรสุทธิ: <strong className={totalIncome - totalExpense >= 0 ? 'text-blue-600' : 'text-red-600'}>{formatCurrency(totalIncome - totalExpense)}</strong></span>
-        </div>
+        {isAdmin && (
+          <div className="mt-3 flex flex-wrap gap-4 text-sm">
+            <span>รายรับรวม: <strong className="text-green-600">{formatCurrency(totalIncome)}</strong></span>
+            <span>รายจ่ายรวม: <strong className="text-red-600">{formatCurrency(totalExpense)}</strong></span>
+            <span>กำไรสุทธิ: <strong className={totalIncome - totalExpense >= 0 ? 'text-blue-600' : 'text-red-600'}>{formatCurrency(totalIncome - totalExpense)}</strong></span>
+          </div>
+        )}
       </div>
 
       {/* Transactions table */}
