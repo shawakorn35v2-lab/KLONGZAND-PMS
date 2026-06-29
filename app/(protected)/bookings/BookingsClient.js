@@ -101,6 +101,9 @@ export default function BookingsClient({ bookings, rooms, today, role, adminName
   const [docFiles, setDocFiles] = useState({ idCard: null })
   const [docPreviews, setDocPreviews] = useState({ idCard: null })
 
+  // Cell popup (click red cell to view bookings)
+  const [cellPopup, setCellPopup] = useState(null)
+
   const filtered = bookings.filter(b => !statusFilter || b.status === statusFilter)
 
   const editConflict = useMemo(() =>
@@ -113,18 +116,24 @@ export default function BookingsClient({ bookings, rooms, today, role, adminName
   // Availability grid
   const days = useMemo(() => makeGridDays(today, gridOffset), [today, gridOffset])
 
-  const occupiedSet = useMemo(() => {
+  const { occupiedSet, occupiedMap } = useMemo(() => {
     const set = new Set()
+    const map = new Map()
     bookings.forEach(b => {
       if (b.status === 'cancelled') return
       days.forEach(d => {
         const isOccupied = b.stay_type === 'temporary'
           ? b.checkin_date === d
           : b.checkin_date <= d && b.checkout_date > d
-        if (isOccupied) set.add(`${b.room_id}__${d}`)
+        if (isOccupied) {
+          const key = `${b.room_id}__${d}`
+          set.add(key)
+          if (!map.has(key)) map.set(key, [])
+          map.get(key).push(b)
+        }
       })
     })
-    return set
+    return { occupiedSet: set, occupiedMap: map }
   }, [bookings, days])
 
   function applyBookingFilter() {
@@ -405,9 +414,24 @@ export default function BookingsClient({ bookings, rooms, today, role, adminName
                     const isToday = d === today
                     return (
                       <td key={d} className={`px-1 py-1.5 text-center ${isToday ? 'bg-blue-50' : ''}`}>
-                        <span className={`inline-block w-full rounded text-center py-0.5 ${occ ? 'bg-red-200 text-red-700' : 'bg-green-100 text-green-700'}`}>
-                          {occ ? '●' : '○'}
-                        </span>
+                        {occ ? (
+                          <button
+                            type="button"
+                            onClick={() => setCellPopup({
+                              bookings: occupiedMap.get(`${room.id}__${d}`) ?? [],
+                              roomNo: room.room_no,
+                              date: d,
+                            })}
+                            title="คลิกดูรายละเอียดการจอง"
+                            className="inline-block w-full rounded text-center py-0.5 bg-red-200 text-red-700 hover:bg-red-300 cursor-pointer transition-colors"
+                          >
+                            ●
+                          </button>
+                        ) : (
+                          <span className="inline-block w-full rounded text-center py-0.5 bg-green-100 text-green-700">
+                            ○
+                          </span>
+                        )}
                       </td>
                     )
                   })}
@@ -719,6 +743,80 @@ export default function BookingsClient({ bookings, rooms, today, role, adminName
                 <button type="button" onClick={() => setEditBooking(null)} className="btn-secondary">ยกเลิก</button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* Cell popup — click red cell to view bookings */}
+      {cellPopup && (
+        <div
+          className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4"
+          onClick={() => setCellPopup(null)}
+        >
+          <div
+            className="bg-white rounded-2xl shadow-2xl max-w-md w-full p-6 max-h-[85vh] overflow-y-auto"
+            onClick={e => e.stopPropagation()}
+          >
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="text-lg font-semibold text-gray-900">
+                การจอง — ห้อง {cellPopup.roomNo} ({formatDate(cellPopup.date)})
+              </h3>
+              <button
+                onClick={() => setCellPopup(null)}
+                className="text-gray-400 hover:text-gray-600 text-xl leading-none"
+              >
+                ✕
+              </button>
+            </div>
+            <div className="space-y-3">
+              {cellPopup.bookings.map(b => (
+                <div key={b.id} className="border border-gray-200 rounded-lg p-3 space-y-1.5 text-sm">
+                  <div className="flex items-center justify-between">
+                    <div className="font-semibold text-gray-900">{b.customer?.full_name ?? '-'}</div>
+                    <BookingStatusBadge status={b.status} />
+                  </div>
+                  {b.customer?.phone && (
+                    <div className="text-gray-500 text-xs">📞 {b.customer.phone}</div>
+                  )}
+                  <div className="grid grid-cols-2 gap-x-2 gap-y-1 text-xs text-gray-600 pt-1">
+                    <div>
+                      เช็คอิน: <span className="text-gray-900">
+                        {formatDate(b.checkin_date)}
+                        {b.checkin_time ? ` ${b.checkin_time.slice(0, 5)}` : ''}
+                      </span>
+                    </div>
+                    <div>
+                      เช็คเอาท์: <span className="text-gray-900">
+                        {formatDate(b.checkout_date)}
+                        {b.checkout_time ? ` ${b.checkout_time.slice(0, 5)}` : ''}
+                      </span>
+                    </div>
+                    <div>ราคา: <span className="text-gray-900">{formatCurrency(b.price)}</span></div>
+                    <div>มัดจำ: <span className="text-gray-900">{formatCurrency(b.deposit)}</span></div>
+                    <div className="col-span-2 flex items-center gap-2">
+                      <span>ช่องทาง:</span>
+                      <ChannelBadge channel={b.channel} />
+                      {b.stay_type === 'temporary' && (
+                        <span className="text-xs bg-orange-100 text-orange-700 px-1.5 py-0.5 rounded font-medium">ชั่วคราว</span>
+                      )}
+                    </div>
+                    {b.note && (
+                      <div className="col-span-2 text-gray-500">📝 {b.note}</div>
+                    )}
+                  </div>
+                  {canEdit && (
+                    <div className="pt-2">
+                      <button
+                        onClick={() => { setCellPopup(null); openEdit(b) }}
+                        className="w-full px-3 py-1.5 text-xs bg-amber-500 text-white rounded hover:bg-amber-600"
+                      >
+                        ✏ แก้ไขการจองนี้
+                      </button>
+                    </div>
+                  )}
+                </div>
+              ))}
+            </div>
           </div>
         </div>
       )}

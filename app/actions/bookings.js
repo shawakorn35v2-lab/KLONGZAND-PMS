@@ -100,6 +100,121 @@ export async function createBooking({ roomId, customerId, newCustomer, channel, 
   return { success: true }
 }
 
+export async function createMultiBookings({ rooms, customerId, newCustomer, channel, checkinDate, checkoutDate, note, idCardUrl, vehicleRegUrl, stayType, checkinTime, checkoutTime }) {
+  const supabase = await createClient()
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) return { error: 'ไม่ได้เข้าสู่ระบบ' }
+
+  if (!Array.isArray(rooms) || rooms.length === 0) return { error: 'กรุณาเลือกอย่างน้อย 1 ห้อง' }
+  if (rooms.some(r => !r.roomId)) return { error: 'กรุณาเลือกห้องให้ครบทุกแถว' }
+  const roomIds = rooms.map(r => r.roomId)
+  if (new Set(roomIds).size !== roomIds.length) return { error: 'มีห้องซ้ำในรายการ — เลือกห้องคนละห้องในแต่ละแถว' }
+
+  const resolvedStayType = stayType || 'overnight'
+  const effectiveCheckout = resolvedStayType === 'temporary' ? checkinDate : checkoutDate
+
+  if (resolvedStayType === 'temporary') {
+    if (!checkinTime || !checkoutTime) return { error: 'กรุณากรอกเวลาเข้าและเวลาออก' }
+    if (checkoutTime <= checkinTime) return { error: 'เวลาออกต้องหลังเวลาเข้า' }
+  } else {
+    if (!checkoutDate || checkoutDate <= checkinDate) return { error: 'วันเช็คเอาท์ต้องหลังวันเช็คอิน' }
+  }
+
+  // Pre-flight conflict check (date-range overlap for any non-cancelled booking on selected rooms)
+  const { data: overlapping } = await supabase
+    .from('bookings')
+    .select('room_id, stay_type, checkin_date, checkout_date, checkin_time, checkout_time, rooms(room_no)')
+    .in('room_id', roomIds)
+    .neq('status', 'cancelled')
+    .lt('checkin_date', effectiveCheckout)
+    .gt('checkout_date', checkinDate)
+
+  const conflictRoomNos = new Set()
+  for (const b of overlapping ?? []) {
+    if (resolvedStayType === 'temporary' && b.stay_type === 'temporary') {
+      // both temporary same date — only conflict if times overlap
+      if (b.checkin_date === checkinDate &&
+          checkinTime < b.checkout_time && b.checkin_time < checkoutTime) {
+        conflictRoomNos.add(b.rooms?.room_no ?? '?')
+      }
+    } else {
+      // overnight vs anything, or temporary vs overnight: any overlap is a conflict
+      conflictRoomNos.add(b.rooms?.room_no ?? '?')
+    }
+  }
+
+  if (conflictRoomNos.size > 0) {
+    return { error: `ห้องต่อไปนี้ไม่ว่าง: ${[...conflictRoomNos].join(', ')} — ยกเลิกการจองทั้งหมด` }
+  }
+
+  // Resolve customer once (find-or-create)
+  let cid = customerId
+  if (!cid && newCustomer?.full_name) {
+    const { data, error } = await supabase
+      .from('customers')
+      .insert({ full_name: newCustomer.full_name, phone: newCustomer.phone || null, note: newCustomer.note || null })
+      .select('id').single()
+    if (error) return { error: error.message }
+    cid = data.id
+  }
+
+  // Insert N bookings + N deposit transactions; rollback on any failure
+  const insertedBookingIds = []
+  try {
+    for (const r of rooms) {
+      const roundedPrice = roundCurrency(r.price)
+      const roundedDeposit = roundCurrency(r.deposit)
+      const { data: booking, error: bErr } = await supabase
+        .from('bookings')
+        .insert({
+          room_id: r.roomId,
+          customer_id: cid,
+          channel,
+          checkin_date: checkinDate,
+          checkout_date: resolvedStayType === 'temporary' ? checkinDate : checkoutDate,
+          price: roundedPrice,
+          deposit: roundedDeposit,
+          note,
+          id_card_url: idCardUrl || null,
+          vehicle_reg_url: vehicleRegUrl || null,
+          stay_type: resolvedStayType,
+          checkin_time: resolvedStayType === 'temporary' ? checkinTime : null,
+          checkout_time: resolvedStayType === 'temporary' ? checkoutTime : null,
+          created_by: user.id,
+        })
+        .select('id')
+        .single()
+      if (bErr) throw new Error(bErr.message)
+      insertedBookingIds.push(booking.id)
+
+      if (roundedDeposit > 0) {
+        const { data: roomData } = await supabase.from('rooms').select('room_no').eq('id', r.roomId).single()
+        const roomNo = roomData?.room_no ?? ''
+        const { error: txErr } = await supabase.from('transactions').insert({
+          tx_date: checkinDate,
+          tx_type: 'income',
+          category: 'ค่ามัดจำ',
+          amount: roundedDeposit,
+          note: roomNo ? `มัดจำการจองห้อง ห้อง ${roomNo}` : `มัดจำการจองห้อง`,
+          booking_id: booking.id,
+          created_by: user.id,
+        })
+        if (txErr) throw new Error(txErr.message)
+      }
+    }
+  } catch (e) {
+    if (insertedBookingIds.length > 0) {
+      await supabase.from('transactions').delete().in('booking_id', insertedBookingIds)
+      await supabase.from('bookings').delete().in('id', insertedBookingIds)
+    }
+    return { error: `บันทึกไม่สำเร็จ: ${e.message} — ยกเลิกการจองทั้งหมด` }
+  }
+
+  revalidatePath('/bookings')
+  revalidatePath('/transactions')
+  return { success: true, bookingIds: insertedBookingIds }
+}
+
 export async function checkinBooking(bookingId) {
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()

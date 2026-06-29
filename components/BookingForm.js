@@ -3,7 +3,7 @@
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import CustomerSearchInput from './CustomerSearchInput'
-import { createBooking } from '@/app/actions/bookings'
+import { createMultiBookings } from '@/app/actions/bookings'
 import { getTodayString } from '@/lib/dateUtils'
 import { createClient } from '@/lib/supabase-browser'
 
@@ -57,14 +57,12 @@ export default function BookingForm({ rooms, bookings, onClose }) {
 
   const [stayType, setStayType] = useState('overnight')
   const [form, setForm] = useState({
-    roomId: '',
     channel: 'walkin',
     checkinDate: today,
     checkoutDate: '',
     checkinTime: '',
     checkoutTime: '',
-    price: '',
-    deposit: '',
+    rooms: [{ roomId: '', price: '', deposit: '' }],
     note: '',
     vehicleReg: '',
   })
@@ -74,10 +72,28 @@ export default function BookingForm({ rooms, bookings, onClose }) {
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
 
-  const availableRooms = getAvailableRooms(rooms, bookings, stayType, form.checkinDate, form.checkoutDate)
+  const baseAvailable = getAvailableRooms(rooms, bookings, stayType, form.checkinDate, form.checkoutDate)
+  function availableForRow(idx) {
+    const usedElsewhere = new Set(
+      form.rooms.map((r, i) => (i !== idx ? r.roomId : null)).filter(Boolean)
+    )
+    return baseAvailable.filter(r => !usedElsewhere.has(r.id))
+  }
 
   function set(field, value) {
     setForm(prev => ({ ...prev, [field]: value }))
+  }
+  function setRoom(idx, field, value) {
+    setForm(prev => ({
+      ...prev,
+      rooms: prev.rooms.map((r, i) => (i === idx ? { ...r, [field]: value } : r)),
+    }))
+  }
+  function addRoom() {
+    setForm(prev => ({ ...prev, rooms: [...prev.rooms, { roomId: '', price: '', deposit: '' }] }))
+  }
+  function removeRoom(idx) {
+    setForm(prev => ({ ...prev, rooms: prev.rooms.filter((_, i) => i !== idx) }))
   }
 
   function handleDocFile(field, file) {
@@ -98,7 +114,15 @@ export default function BookingForm({ rooms, bookings, onClose }) {
       setError('กรุณาเลือกหรือสร้างลูกค้า')
       return
     }
-    if (!form.roomId) { setError('กรุณาเลือกห้องพัก'); return }
+    if (form.rooms.length === 0 || form.rooms.some(r => !r.roomId)) {
+      setError('กรุณาเลือกห้องพักให้ครบทุกแถว')
+      return
+    }
+    const roomIds = form.rooms.map(r => r.roomId)
+    if (new Set(roomIds).size !== roomIds.length) {
+      setError('มีห้องซ้ำในรายการ')
+      return
+    }
 
     if (stayType === 'temporary') {
       if (!form.checkinDate) { setError('กรุณาเลือกวันที่'); return }
@@ -116,15 +140,17 @@ export default function BookingForm({ rooms, bookings, onClose }) {
       const idCardUrl = docFiles.idCard ? await uploadDoc(docFiles.idCard) : null
       const vehicleRegUrl = form.vehicleReg.trim() || null
 
-      const result = await createBooking({
-        roomId: form.roomId,
+      const result = await createMultiBookings({
+        rooms: form.rooms.map(r => ({
+          roomId: r.roomId,
+          price: r.price || 0,
+          deposit: r.deposit || 0,
+        })),
         customerId: customerData.existingId,
         newCustomer: customerData.newCustomer,
         channel: form.channel,
         checkinDate: form.checkinDate,
         checkoutDate: stayType === 'temporary' ? form.checkinDate : form.checkoutDate,
-        price: form.price || 0,
-        deposit: form.deposit || 0,
         note: form.note,
         idCardUrl,
         vehicleRegUrl,
@@ -199,19 +225,72 @@ export default function BookingForm({ rooms, bookings, onClose }) {
         </div>
       )}
 
-      <div>
-        <label className="label">ห้องพัก *</label>
-        <select required value={form.roomId} onChange={e => set('roomId', e.target.value)} className="input">
-          <option value="">-- เลือกห้อง --</option>
-          {availableRooms.map(r => (
-            <option key={r.id} value={r.id}>
-              ห้อง {r.room_no} (อาคาร {r.building}) {r.price_per_night > 0 ? `— ฿${Number(r.price_per_night).toLocaleString('th-TH')}/คืน` : ''}
-            </option>
-          ))}
-        </select>
-        {availableRooms.length === 0 && form.checkinDate && (
-          <p className="text-xs text-red-500 mt-1">ไม่มีห้องว่างในช่วงที่เลือก</p>
+      <div className="space-y-3">
+        <div className="flex items-center justify-between">
+          <label className="label mb-0">ห้องพัก *</label>
+          <button
+            type="button"
+            onClick={addRoom}
+            disabled={baseAvailable.length <= form.rooms.length}
+            className="text-xs text-blue-600 hover:underline disabled:text-gray-400 disabled:cursor-not-allowed disabled:no-underline"
+          >
+            + เพิ่มห้อง
+          </button>
+        </div>
+        {baseAvailable.length === 0 && form.checkinDate && (
+          <p className="text-xs text-red-500">ไม่มีห้องว่างในช่วงที่เลือก</p>
         )}
+        {form.rooms.map((row, idx) => (
+          <div key={idx} className="border border-gray-200 rounded-lg p-3 space-y-2 bg-gray-50">
+            <div className="flex items-center justify-between">
+              <span className="text-xs font-semibold text-gray-600">ห้องที่ {idx + 1}</span>
+              {form.rooms.length > 1 && (
+                <button
+                  type="button"
+                  onClick={() => removeRoom(idx)}
+                  className="text-xs text-red-500 hover:text-red-700"
+                >
+                  ลบห้องนี้
+                </button>
+              )}
+            </div>
+            <select
+              required
+              value={row.roomId}
+              onChange={e => setRoom(idx, 'roomId', e.target.value)}
+              className="input"
+            >
+              <option value="">-- เลือกห้อง --</option>
+              {availableForRow(idx).map(r => (
+                <option key={r.id} value={r.id}>
+                  ห้อง {r.room_no} (อาคาร {r.building}) {r.price_per_night > 0 ? `— ฿${Number(r.price_per_night).toLocaleString('th-TH')}/คืน` : ''}
+                </option>
+              ))}
+            </select>
+            <div className="grid grid-cols-2 gap-2">
+              <div>
+                <label className="text-xs text-gray-500">ราคา (บาท)</label>
+                <input
+                  type="number" min="0" step="0.01"
+                  value={row.price}
+                  onChange={e => setRoom(idx, 'price', e.target.value)}
+                  onWheel={e => e.currentTarget.blur()}
+                  className="input" placeholder="0.00"
+                />
+              </div>
+              <div>
+                <label className="text-xs text-gray-500">มัดจำ (บาท)</label>
+                <input
+                  type="number" min="0" step="0.01"
+                  value={row.deposit}
+                  onChange={e => setRoom(idx, 'deposit', e.target.value)}
+                  onWheel={e => e.currentTarget.blur()}
+                  className="input" placeholder="0.00"
+                />
+              </div>
+            </div>
+          </div>
+        ))}
       </div>
 
       <div>
@@ -219,23 +298,6 @@ export default function BookingForm({ rooms, bookings, onClose }) {
         <select value={form.channel} onChange={e => set('channel', e.target.value)} className="input">
           {CHANNEL_OPTIONS.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
         </select>
-      </div>
-
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-        <div>
-          <label className="label">ราคารวม (บาท)</label>
-          <input type="number" min="0" step="0.01" value={form.price}
-            onChange={e => set('price', e.target.value)}
-            onWheel={e => e.currentTarget.blur()}
-            className="input" placeholder="0.00" />
-        </div>
-        <div>
-          <label className="label">มัดจำ (บาท)</label>
-          <input type="number" min="0" step="0.01" value={form.deposit}
-            onChange={e => set('deposit', e.target.value)}
-            onWheel={e => e.currentTarget.blur()}
-            className="input" placeholder="0.00" />
-        </div>
       </div>
 
       <div>
