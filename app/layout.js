@@ -11,7 +11,15 @@ const mali = Mali({
 export const metadata = {
   title: 'KLONGZAND PMS',
   description: 'ระบบจัดการรีสอร์ท KLONGZAND',
-  icons: { icon: '/logo-icon.png' },
+  manifest: '/manifest.json',
+  icons: {
+    icon: ['/icon-192.png', '/icon-512.png'],
+    apple: '/apple-touch-icon.png',
+  },
+}
+
+export const viewport = {
+  themeColor: '#001840',
 }
 
 export default function RootLayout({ children }) {
