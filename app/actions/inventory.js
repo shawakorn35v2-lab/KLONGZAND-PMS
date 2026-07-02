@@ -56,17 +56,35 @@ export async function createInventoryItem({ name, unit, reorder_point }) {
   return { data }
 }
 
-export async function updateInventoryItem(id, { is_for_sale, sale_price }) {
+export async function updateInventoryItem(id, fields) {
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) return { error: 'ไม่ได้เข้าสู่ระบบ' }
   const { data: profile } = await supabase.from('profiles').select('role').eq('id', user.id).single()
   if (profile?.role !== 'admin') return { error: 'เฉพาะแอดมินเท่านั้น' }
 
-  const { error } = await supabase.from('inventory_items').update({
-    is_for_sale: Boolean(is_for_sale),
-    sale_price: is_for_sale ? (Number(sale_price) || null) : null,
-  }).eq('id', id)
+  const patch = {}
+  if ('is_for_sale' in fields) {
+    patch.is_for_sale = Boolean(fields.is_for_sale)
+    patch.sale_price = fields.is_for_sale ? (Number(fields.sale_price) || null) : null
+  }
+  if ('name' in fields) {
+    const name = String(fields.name || '').trim()
+    if (!name) return { error: 'กรุณากรอกชื่อรายการ' }
+    patch.name = name
+  }
+  if ('unit' in fields) {
+    const unit = String(fields.unit || '').trim()
+    if (!unit) return { error: 'กรุณากรอกหน่วย' }
+    patch.unit = unit
+  }
+  if ('reorder_point' in fields) {
+    patch.reorder_point = Number(fields.reorder_point) || 0
+  }
+
+  if (Object.keys(patch).length === 0) return {}
+
+  const { error } = await supabase.from('inventory_items').update(patch).eq('id', id)
   if (error) return { error: error.message }
   revalidatePath('/inventory')
   return {}

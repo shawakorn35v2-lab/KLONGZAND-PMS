@@ -48,6 +48,12 @@ export default function InventoryClient({ items, movements, requests, rooms, rol
   const [editItemLoading, setEditItemLoading] = useState(false)
   const [editItemError, setEditItemError] = useState('')
 
+  // Edit item core fields (name / unit / reorder_point) — admin only
+  const [editCoreItem, setEditCoreItem] = useState(null)
+  const [editCoreForm, setEditCoreForm] = useState({ name: '', unit: '', reorder_point: '' })
+  const [editCoreLoading, setEditCoreLoading] = useState(false)
+  const [editCoreError, setEditCoreError] = useState('')
+
   // Sell modal
   const [sellModal, setSellModal] = useState(null)
   const [sellForm, setSellForm] = useState({ quantity: '', note: '' })
@@ -130,6 +136,33 @@ export default function InventoryClient({ items, movements, requests, rooms, rol
     setEditItemLoading(false)
     if (result.error) { setEditItemError(result.error); return }
     setEditItem(null)
+    router.refresh()
+  }
+
+  function openEditCore(item) {
+    setEditCoreItem(item)
+    setEditCoreForm({
+      name: item.name ?? '',
+      unit: item.unit ?? '',
+      reorder_point: item.reorder_point ?? '',
+    })
+    setEditCoreError('')
+  }
+
+  async function handleUpdateCore(e) {
+    e.preventDefault()
+    setEditCoreError('')
+    if (!editCoreForm.name.trim()) { setEditCoreError('กรุณากรอกชื่อรายการ'); return }
+    if (!editCoreForm.unit.trim()) { setEditCoreError('กรุณากรอกหน่วย'); return }
+    setEditCoreLoading(true)
+    const result = await updateInventoryItem(editCoreItem.id, {
+      name: editCoreForm.name,
+      unit: editCoreForm.unit,
+      reorder_point: editCoreForm.reorder_point,
+    })
+    setEditCoreLoading(false)
+    if (result.error) { setEditCoreError(result.error); return }
+    setEditCoreItem(null)
     router.refresh()
   }
 
@@ -400,10 +433,16 @@ export default function InventoryClient({ items, movements, requests, rooms, rol
                               </button>
                             )}
                             {isAdmin && (
-                              <button onClick={() => openEditItem(item)}
-                                className="px-2.5 py-1 text-xs bg-gray-200 text-gray-700 rounded hover:bg-gray-300">
-                                ⚙ ตั้งค่า
-                              </button>
+                              <>
+                                <button onClick={() => openEditCore(item)}
+                                  className="px-2.5 py-1 text-xs bg-blue-600 text-white rounded hover:bg-blue-700 font-medium">
+                                  ✏ แก้ไข
+                                </button>
+                                <button onClick={() => openEditItem(item)}
+                                  className="px-2.5 py-1 text-xs bg-gray-200 text-gray-700 rounded hover:bg-gray-300">
+                                  ⚙ ตั้งค่า
+                                </button>
+                              </>
                             )}
                           </div>
                         </td>
@@ -577,10 +616,16 @@ export default function InventoryClient({ items, movements, requests, rooms, rol
                               🛒 ขาย
                             </button>
                             {isAdmin && (
-                              <button onClick={() => openEditItem(item)}
-                                className="px-2.5 py-1 text-xs bg-gray-200 text-gray-700 rounded hover:bg-gray-300">
-                                ⚙ ตั้งค่า
-                              </button>
+                              <>
+                                <button onClick={() => openEditCore(item)}
+                                  className="px-2.5 py-1 text-xs bg-blue-600 text-white rounded hover:bg-blue-700 font-medium">
+                                  ✏ แก้ไข
+                                </button>
+                                <button onClick={() => openEditItem(item)}
+                                  className="px-2.5 py-1 text-xs bg-gray-200 text-gray-700 rounded hover:bg-gray-300">
+                                  ⚙ ตั้งค่า
+                                </button>
+                              </>
                             )}
                           </div>
                         </td>
@@ -816,6 +861,45 @@ export default function InventoryClient({ items, movements, requests, rooms, rol
               </button>
               <button onClick={() => setConfirmConvertModal(null)} className="btn-secondary">ยกเลิก</button>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── MODAL: แก้ไขข้อมูลรายการ (admin) — ชื่อ / หน่วย / จุดเตือน ── */}
+      {editCoreItem && isAdmin && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-sm p-6">
+            <h3 className="text-base font-bold text-gray-900 mb-1">แก้ไขข้อมูลรายการ</h3>
+            <p className="text-sm text-gray-500 mb-4">{editCoreItem.name}</p>
+            <form onSubmit={handleUpdateCore} className="space-y-3">
+              <div>
+                <label className="label">ชื่อรายการ *</label>
+                <input type="text" required value={editCoreForm.name}
+                  onChange={e => setEditCoreForm(p => ({ ...p, name: e.target.value }))}
+                  className="input" autoFocus />
+              </div>
+              <div>
+                <label className="label">หน่วย *</label>
+                <input type="text" required value={editCoreForm.unit}
+                  onChange={e => setEditCoreForm(p => ({ ...p, unit: e.target.value }))}
+                  className="input" placeholder="ชิ้น / ม้วน / ขวด / แพ็ค" />
+              </div>
+              <div>
+                <label className="label">จุดเตือนสต๊อก</label>
+                <input type="number" min="0" step="1" inputMode="numeric"
+                  value={editCoreForm.reorder_point}
+                  onChange={e => setEditCoreForm(p => ({ ...p, reorder_point: e.target.value }))}
+                  onWheel={e => e.currentTarget.blur()}
+                  className="input" placeholder="0" />
+              </div>
+              {editCoreError && <p className="text-sm text-red-600 bg-red-50 px-3 py-2 rounded-lg">{editCoreError}</p>}
+              <div className="flex gap-3 pt-1">
+                <button type="submit" disabled={editCoreLoading} className="btn-primary flex-1 justify-center">
+                  {editCoreLoading ? 'กำลังบันทึก...' : 'บันทึก'}
+                </button>
+                <button type="button" onClick={() => setEditCoreItem(null)} className="btn-secondary">ยกเลิก</button>
+              </div>
+            </form>
           </div>
         </div>
       )}
