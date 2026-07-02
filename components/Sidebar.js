@@ -12,7 +12,7 @@ const allNavItems = [
   { href: '/transactions', label: 'รายรับ-รายจ่าย', icon: '💰', adminOnly: false },
   { href: '/housekeeping', label: 'ทำความสะอาด', icon: '🧹', adminOnly: false },
   { href: '/inventory', label: 'สต๊อกของใช้', icon: '📦', adminOnly: false },
-  { href: '/rooms', label: 'ห้องพัก', icon: '🏠', adminOnly: true },
+  { href: '/rooms', label: 'ห้องพัก', icon: '🏠', adminOnly: false },
 ]
 
 export default function Sidebar({ user, isOpen, onClose }) {
