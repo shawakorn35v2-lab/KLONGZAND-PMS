@@ -4,6 +4,7 @@ import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import TransactionForm from '@/components/TransactionForm'
 import ExportButtons from '@/components/ExportButtons'
+import ManageCategoriesModal from '@/components/ManageCategoriesModal'
 import { TxTypeBadge } from '@/components/RoomStatusBadge'
 import { deleteTransaction } from '@/app/actions/transactions'
 import { sellItem } from '@/app/actions/inventory'
@@ -22,12 +23,14 @@ const EXPORT_COLS = [
 export default function TransactionsClient({
   transactions, today, from, to,
   todayIncome, todayExpense, saleItems, isAdmin,
+  categories, incomeCategories, expenseCategories, categoryUsage,
 }) {
   const router = useRouter()
   const [showForm, setShowForm] = useState(false)
   const [fromDate, setFromDate] = useState(from)
   const [toDate, setToDate] = useState(to)
   const [deletingId, setDeletingId] = useState(null)
+  const [showCategories, setShowCategories] = useState(false)
 
   // บันทึกขายของ
   const [showSellForm, setShowSellForm] = useState(false)
@@ -112,6 +115,15 @@ export default function TransactionsClient({
             {showSellForm ? '✕ ปิด' : '🛒 บันทึกขายของ'}
           </button>
         )}
+        {isAdmin && (
+          <button
+            onClick={() => setShowCategories(true)}
+            className="btn-secondary"
+            title="เพิ่ม/ลบหมวดหมู่รายรับ-รายจ่าย"
+          >
+            ⚙ จัดการหมวดหมู่
+          </button>
+        )}
         <div className="flex-1" />
         <ExportButtons
           data={transactions}
@@ -125,8 +137,21 @@ export default function TransactionsClient({
       {showForm && (
         <div className="card max-w-md">
           <h2 className="text-base font-semibold text-gray-900 mb-4">เพิ่มรายการ</h2>
-          <TransactionForm onClose={() => setShowForm(false)} />
+          <TransactionForm
+            onClose={() => setShowForm(false)}
+            incomeCategories={incomeCategories}
+            expenseCategories={expenseCategories}
+          />
         </div>
+      )}
+
+      {/* Manage categories modal */}
+      {showCategories && (
+        <ManageCategoriesModal
+          categories={categories}
+          usage={categoryUsage}
+          onClose={() => setShowCategories(false)}
+        />
       )}
 
       {/* Sell form */}

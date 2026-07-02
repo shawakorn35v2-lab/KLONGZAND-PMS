@@ -5,16 +5,13 @@ import { useRouter } from 'next/navigation'
 import { createTransaction } from '@/app/actions/transactions'
 import { getTodayString } from '@/lib/dateUtils'
 
-const INCOME_CATEGORIES = ['ค่าห้อง', 'ค่ามัดจำ', 'ค่าบริการ', 'อื่นๆ']
-const EXPENSE_CATEGORIES = ['ค่าสาธารณูปโภค', 'ซ่อมบำรุง', 'วัสดุ-อุปกรณ์', 'เงินเดือน', 'อื่นๆ']
-
-export default function TransactionForm({ onClose }) {
+export default function TransactionForm({ onClose, incomeCategories = [], expenseCategories = [] }) {
   const router = useRouter()
   const today = getTodayString()
   const [form, setForm] = useState({
     tx_date: today,
     tx_type: 'income',
-    category: INCOME_CATEGORIES[0],
+    category: incomeCategories[0] ?? '',
     amount: '',
     note: '',
   })
@@ -25,7 +22,7 @@ export default function TransactionForm({ onClose }) {
     setForm(prev => {
       const next = { ...prev, [field]: value }
       if (field === 'tx_type') {
-        next.category = value === 'income' ? INCOME_CATEGORIES[0] : EXPENSE_CATEGORIES[0]
+        next.category = value === 'income' ? (incomeCategories[0] ?? '') : (expenseCategories[0] ?? '')
       }
       return next
     })
@@ -34,6 +31,7 @@ export default function TransactionForm({ onClose }) {
   async function handleSubmit(e) {
     e.preventDefault()
     setError('')
+    if (!form.category) { setError('กรุณาเลือกหมวดหมู่ (แอดมินต้องสร้างหมวดหมู่ก่อน)'); return }
     if (!form.amount || Number(form.amount) <= 0) { setError('กรุณากรอกจำนวนเงิน'); return }
     setLoading(true)
     const result = await createTransaction({
@@ -49,7 +47,7 @@ export default function TransactionForm({ onClose }) {
     onClose?.()
   }
 
-  const categories = form.tx_type === 'income' ? INCOME_CATEGORIES : EXPENSE_CATEGORIES
+  const categories = form.tx_type === 'income' ? incomeCategories : expenseCategories
 
   return (
     <form onSubmit={handleSubmit} className="space-y-4">
@@ -79,9 +77,15 @@ export default function TransactionForm({ onClose }) {
 
       <div>
         <label className="label">หมวดหมู่</label>
-        <select value={form.category} onChange={e => set('category', e.target.value)} className="input">
-          {categories.map(c => <option key={c} value={c}>{c}</option>)}
-        </select>
+        {categories.length === 0 ? (
+          <p className="text-sm text-amber-700 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2">
+            ยังไม่มีหมวดหมู่{form.tx_type === 'income' ? 'รายรับ' : 'รายจ่าย'} — แอดมินต้องเพิ่มก่อนใช้งาน
+          </p>
+        ) : (
+          <select value={form.category} onChange={e => set('category', e.target.value)} className="input">
+            {categories.map(c => <option key={c} value={c}>{c}</option>)}
+          </select>
+        )}
       </div>
 
       <div>

@@ -29,6 +29,7 @@ export default async function TransactionsPage({ searchParams }) {
   const [
     { data: transactions },
     { data: saleItems },
+    { data: categories },
   ] = await Promise.all([
     txQuery,
     supabase
@@ -37,7 +38,26 @@ export default async function TransactionsPage({ searchParams }) {
       .eq('is_for_sale', true)
       .eq('is_active', true)
       .order('name'),
+    supabase
+      .from('transaction_categories')
+      .select('id, tx_type, name, sort_order')
+      .eq('is_active', true)
+      .order('tx_type', { ascending: true })
+      .order('sort_order', { ascending: true }),
   ])
+
+  const cats = categories ?? []
+  const incomeCategories = cats.filter(c => c.tx_type === 'income').map(c => c.name)
+  const expenseCategories = cats.filter(c => c.tx_type === 'expense').map(c => c.name)
+
+  // Usage counts (admin only, used to warn before deleting a category still in use)
+  let categoryUsage = {}
+  if (isAdmin) {
+    const { data: allCats } = await supabase.from('transactions').select('category')
+    ;(allCats ?? []).forEach(r => {
+      if (r.category) categoryUsage[r.category] = (categoryUsage[r.category] || 0) + 1
+    })
+  }
 
   const txs = (transactions ?? []).map(t => ({
     ...t,
@@ -62,6 +82,10 @@ export default async function TransactionsPage({ searchParams }) {
         todayExpense={todayExpense}
         saleItems={saleItems ?? []}
         isAdmin={isAdmin}
+        categories={cats}
+        incomeCategories={incomeCategories}
+        expenseCategories={expenseCategories}
+        categoryUsage={categoryUsage}
       />
     </div>
   )
