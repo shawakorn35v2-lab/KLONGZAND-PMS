@@ -5,6 +5,7 @@ import ChannelChart from '@/components/charts/ChannelChart'
 import OccupancyChart from '@/components/charts/OccupancyChart'
 import OccupancyMonthCard from '@/components/OccupancyMonthCard'
 import ExportButtons from '@/components/ExportButtons'
+import InvestmentTracker from '@/components/InvestmentTracker'
 import { getTodayString, formatLongDate } from '@/lib/dateUtils'
 
 function fmt(n) { return '฿' + Number(n || 0).toLocaleString('th-TH', { minimumFractionDigits: 2 }) }
@@ -43,6 +44,7 @@ export default async function DashboardPage() {
     { data: allTimeTxs },
     { count: totalBookingsCount },
     { data: occupancyBookings },
+    { data: resortSettings },
   ] = await Promise.all([
     supabase.from('rooms').select('*').eq('is_active', true).order('room_no'),
     supabase.from('bookings').select('room_id, status').in('status', ['reserved', 'checked_in']),
@@ -50,9 +52,10 @@ export default async function DashboardPage() {
     supabase.from('transactions').select('tx_type, amount').gte('tx_date', monthStart),
     supabase.from('transactions').select('tx_date, tx_type, amount').gte('tx_date', twelveMonthsAgo),
     supabase.from('bookings').select('room_id, channel, price, status').gte('checkin_date', twelveMonthsAgo),
-    supabase.from('transactions').select('tx_type, amount'),
+    supabase.from('transactions').select('tx_date, tx_type, amount'),
     supabase.from('bookings').select('*', { count: 'exact', head: true }),
     supabase.from('bookings').select('room_id, checkin_date, checkout_date, stay_type').neq('status', 'cancelled').gte('checkout_date', twelveMonthsAgo),
+    supabase.from('resort_settings').select('investment_cost, investment_start_date').eq('id', 1).maybeSingle(),
   ])
 
   const calcStats = (txs) => {
@@ -94,6 +97,23 @@ export default async function DashboardPage() {
 
   // Current month string for OccupancyMonthCard default
   const currentMonth = today.slice(0, 7)
+
+  // Investment payback tracking
+  const investmentCost = Number(resortSettings?.investment_cost ?? 0)
+  const investmentStartDate = resortSettings?.investment_start_date ?? null
+  const cumulativeSinceStart = investmentStartDate
+    ? calcStats((allTimeTxs ?? []).filter(t => t.tx_date >= investmentStartDate))
+    : { net: 0 }
+  const cumulativeNet = cumulativeSinceStart.net
+
+  // Avg monthly net over the last 3 calendar months (bounded by investment_start_date)
+  const threeMonthsAgoDate = new Date(now.getFullYear(), now.getMonth() - 2, 1)
+  const threeMonthsAgoStr = `${threeMonthsAgoDate.getFullYear()}-${String(threeMonthsAgoDate.getMonth() + 1).padStart(2, '0')}-01`
+  const avgRangeStart = investmentStartDate && investmentStartDate > threeMonthsAgoStr
+    ? investmentStartDate
+    : threeMonthsAgoStr
+  const recentNet = calcStats((yearTxs ?? []).filter(t => t.tx_date >= avgRangeStart)).net
+  const avgMonthlyNet = recentNet / 3
 
   const exportCols = [
     { key: 'tx_date', header: 'วันที่', format: 'date' },
@@ -148,6 +168,17 @@ export default async function DashboardPage() {
           <StatCard label="กำไรสุทธิสะสม" value={fmt(allTimeNet)} color={allTimeNet >= 0 ? 'blue' : 'red'} />
           <StatCard label="การจองทั้งหมด" value={`${(totalBookingsCount ?? 0).toLocaleString()} ครั้ง`} color="gray" />
         </div>
+      </div>
+
+      {/* Investment payback tracker */}
+      <div>
+        <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-3">ติดตามการคืนทุน</p>
+        <InvestmentTracker
+          investmentCost={investmentCost}
+          investmentStartDate={investmentStartDate}
+          cumulativeNet={cumulativeNet}
+          avgMonthlyNet={avgMonthlyNet}
+        />
       </div>
 
       {/* Real-time occupancy */}
