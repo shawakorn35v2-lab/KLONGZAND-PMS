@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useMemo } from 'react'
+import { useState, useMemo, useRef } from 'react'
 import { useRouter } from 'next/navigation'
 import { saveMeterReading, deleteMeterReading, updateRoom } from '@/app/actions/rooms'
 
@@ -30,6 +30,7 @@ export default function MeterClient({ readings, room }) {
   const [printRow, setPrintRow] = useState(null)
   const [deductions, setDeductions] = useState([{ desc: '', amount: '' }])
   const [printing, setPrinting] = useState(false)
+  const invoiceRef = useRef(null)
 
   // Live preview for edit modal
   const editUnits = useMemo(() =>
@@ -106,52 +107,26 @@ export default function MeterClient({ readings, room }) {
     if (!printRow) return
     setPrinting(true)
     try {
+      const html2canvas = (await import('html2canvas')).default
       const { default: jsPDF } = await import('jspdf')
-      const { default: autoTable } = await import('jspdf-autotable')
-      const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' })
-      const pageW = doc.internal.pageSize.getWidth()
 
-      doc.setFontSize(18); doc.setFont('helvetica', 'bold')
-      doc.text('KLONGZAND PMS', pageW / 2, 20, { align: 'center' })
-      doc.setFontSize(13)
-      doc.text('ใบแจ้งหนี้ค่าเช่า', pageW / 2, 29, { align: 'center' })
-      doc.setDrawColor(200, 200, 200)
-      doc.line(14, 33, pageW - 14, 33)
-
-      doc.setFontSize(10); doc.setFont('helvetica', 'normal')
-      doc.text(`ห้อง ${room.room_no}  อาคาร ${room.building}`, 14, 41)
-      doc.text(`รอบบิล: ${formatMonth(printRow.billing_month)}`, 14, 48)
-      doc.text(`วันที่พิมพ์: ${formatDate(getTodayString())}`, pageW - 14, 48, { align: 'right' })
-
-      const rows = []
-      if (Number(rentVal) > 0)
-        rows.push(['ค่าเช่าห้องรายเดือน', '', '', fmt(rentVal)])
-
-      const units = Number(printRow.curr_reading) - Number(printRow.prev_reading)
-      rows.push(['ค่าไฟฟ้า', `${fmtN(printRow.prev_reading)} → ${fmtN(printRow.curr_reading)}`, `${fmtN(units)} หน่วย × ${fmt(printRow.unit_price)}`, fmt(printRow.electric_cost)])
-      rows.push(['ค่าน้ำ (เหมา)', '', '', fmt(printRow.water_flat_fee)])
-      validDeductions.forEach(d => rows.push([d.desc, '', '', fmt(d.amount)]))
-
-      autoTable(doc, {
-        head: [['รายการ', 'มิเตอร์', 'รายละเอียด', 'จำนวนเงิน']],
-        body: rows,
-        startY: 55,
-        styles: { fontSize: 9 },
-        headStyles: { fillColor: [37, 99, 235], textColor: 255, fontStyle: 'bold' },
-        columnStyles: { 3: { halign: 'right', fontStyle: 'bold' } },
-        alternateRowStyles: { fillColor: [248, 250, 252] },
+      const element = invoiceRef.current
+      const canvas = await html2canvas(element, {
+        scale: 2,
+        useCORS: true,
+        backgroundColor: '#ffffff',
       })
 
-      const finalY = doc.lastAutoTable.finalY + 6
-      doc.setFillColor(37, 99, 235); doc.setTextColor(255, 255, 255)
-      doc.roundedRect(pageW - 80, finalY, 66, 12, 2, 2, 'F')
-      doc.setFontSize(11); doc.setFont('helvetica', 'bold')
-      doc.text('รวมทั้งสิ้น', pageW - 74, finalY + 8)
-      doc.text(fmt(grandTotal), pageW - 16, finalY + 8, { align: 'right' })
+      const imgData = canvas.toDataURL('image/png')
+      const pdf = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' })
+      const pageWidth = pdf.internal.pageSize.getWidth()
+      const pageHeight = pdf.internal.pageSize.getHeight()
+      const imgWidth = pageWidth
+      const imgHeight = (canvas.height * pageWidth) / canvas.width
 
-      doc.setTextColor(150, 150, 150); doc.setFontSize(8); doc.setFont('helvetica', 'normal')
-      doc.text('KLONGZAND PMS — ใบแจ้งหนี้นี้ออกโดยระบบอัตโนมัติ', pageW / 2, 285, { align: 'center' })
-      doc.save(`ใบแจ้งหนี้-ห้อง${room.room_no}-${printRow.billing_month}.pdf`)
+      const yOffset = imgHeight < pageHeight ? (pageHeight - imgHeight) / 2 : 0
+      pdf.addImage(imgData, 'PNG', 0, yOffset, imgWidth, Math.min(imgHeight, pageHeight))
+      pdf.save(`ใบแจ้งหนี้-ห้อง${room.room_no}-${printRow.billing_month}.pdf`)
     } finally {
       setPrinting(false)
     }
@@ -319,23 +294,7 @@ export default function MeterClient({ readings, room }) {
             <h3 className="text-base font-bold text-gray-900 mb-1">ใบแจ้งหนี้ค่าเช่า</h3>
             <p className="text-sm text-gray-500 mb-4">ห้อง {room.room_no} — {formatMonth(printRow.billing_month)}</p>
 
-            <div className="bg-gray-50 rounded-xl p-4 mb-4 space-y-2 text-sm">
-              {Number(rentVal) > 0 && (
-                <div className="flex justify-between">
-                  <span className="text-gray-600">ค่าเช่าห้องรายเดือน</span>
-                  <span className="font-medium">{fmt(rentVal)}</span>
-                </div>
-              )}
-              <div className="flex justify-between">
-                <span className="text-gray-600">ค่าไฟ ({fmtN(printRow.curr_reading - printRow.prev_reading)} หน่วย × {fmt(printRow.unit_price)})</span>
-                <span className="font-medium">{fmt(printRow.electric_cost)}</span>
-              </div>
-              <div className="flex justify-between">
-                <span className="text-gray-600">ค่าน้ำ (เหมา)</span>
-                <span className="font-medium">{fmt(printRow.water_flat_fee)}</span>
-              </div>
-            </div>
-
+            {/* Deductions input (not part of the printed invoice) */}
             <div className="mb-4">
               <div className="flex items-center justify-between mb-2">
                 <label className="text-sm font-medium text-gray-700">รายการหักเพิ่มเติม</label>
@@ -357,13 +316,73 @@ export default function MeterClient({ readings, room }) {
               </div>
             </div>
 
-            <div className="border-t-2 border-blue-600 pt-3 mb-4">
-              <div className="flex justify-between text-base font-bold text-blue-700">
-                <span>รวมทั้งสิ้น</span><span>{fmt(grandTotal)}</span>
+            {/* Invoice preview — captured by html2canvas and exported to PDF */}
+            <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">ตัวอย่างใบแจ้งหนี้</p>
+            <div ref={invoiceRef} className="bg-white border border-gray-200 rounded-lg p-5 text-sm">
+              <div className="text-center mb-4">
+                <p className="text-lg font-bold text-gray-900">KLONGZAND PMS</p>
+                <p className="text-sm text-gray-600">ใบแจ้งหนี้ค่าเช่า</p>
               </div>
+              <div className="border-t border-gray-200 mb-3" />
+
+              <div className="flex justify-between mb-4 text-xs">
+                <div className="space-y-0.5">
+                  <p><span className="text-gray-500">ห้อง:</span> <span className="font-semibold text-gray-900">{room.room_no}</span> <span className="text-gray-500">อาคาร</span> {room.building}</p>
+                  <p><span className="text-gray-500">รอบบิล:</span> {formatMonth(printRow.billing_month)}</p>
+                </div>
+                <div className="text-right">
+                  <p className="text-gray-500">วันที่พิมพ์</p>
+                  <p className="font-medium">{formatDate(getTodayString())}</p>
+                </div>
+              </div>
+
+              <table className="w-full text-xs mb-3">
+                <thead>
+                  <tr className="bg-blue-600 text-white">
+                    <th className="text-left px-2 py-1.5">รายการ</th>
+                    <th className="text-right px-2 py-1.5 w-28">จำนวนเงิน</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-gray-100">
+                  {Number(rentVal) > 0 && (
+                    <tr>
+                      <td className="px-2 py-1.5">ค่าเช่าห้องรายเดือน</td>
+                      <td className="px-2 py-1.5 text-right font-medium">{fmt(rentVal)}</td>
+                    </tr>
+                  )}
+                  <tr>
+                    <td className="px-2 py-1.5">
+                      ค่าไฟฟ้า ({fmtN(printRow.curr_reading - printRow.prev_reading)} หน่วย × {fmt(printRow.unit_price)})
+                      <div className="text-[10px] text-gray-500">
+                        มิเตอร์ {fmtN(printRow.prev_reading)} → {fmtN(printRow.curr_reading)}
+                      </div>
+                    </td>
+                    <td className="px-2 py-1.5 text-right font-medium">{fmt(printRow.electric_cost)}</td>
+                  </tr>
+                  <tr>
+                    <td className="px-2 py-1.5">ค่าน้ำ (เหมา)</td>
+                    <td className="px-2 py-1.5 text-right font-medium">{fmt(printRow.water_flat_fee)}</td>
+                  </tr>
+                  {validDeductions.map((d, i) => (
+                    <tr key={`d${i}`}>
+                      <td className="px-2 py-1.5">{d.desc}</td>
+                      <td className="px-2 py-1.5 text-right font-medium">{fmt(d.amount)}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+
+              <div className="bg-blue-600 text-white rounded-md px-3 py-2 flex justify-between font-bold">
+                <span>รวมทั้งสิ้น</span>
+                <span>{fmt(grandTotal)}</span>
+              </div>
+
+              <p className="text-center text-[10px] text-gray-400 mt-3">
+                KLONGZAND PMS — ใบแจ้งหนี้นี้ออกโดยระบบอัตโนมัติ
+              </p>
             </div>
 
-            <div className="flex gap-3">
+            <div className="flex gap-3 mt-4">
               <button onClick={handlePrintPDF} disabled={printing} className="btn-primary flex-1 justify-center">
                 {printing ? 'กำลังสร้าง PDF...' : '🖨 ดาวน์โหลด PDF'}
               </button>
