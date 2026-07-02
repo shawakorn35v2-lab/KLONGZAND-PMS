@@ -3,7 +3,6 @@
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import TransactionForm from '@/components/TransactionForm'
-import DailyCloseButton from '@/components/DailyCloseButton'
 import ExportButtons from '@/components/ExportButtons'
 import { TxTypeBadge } from '@/components/RoomStatusBadge'
 import { deleteTransaction } from '@/app/actions/transactions'
@@ -22,7 +21,7 @@ const EXPORT_COLS = [
 
 export default function TransactionsClient({
   transactions, today, from, to,
-  todayIncome, todayExpense, alreadyClosed, closedDates, saleItems, isAdmin,
+  todayIncome, todayExpense, saleItems, isAdmin,
 }) {
   const router = useRouter()
   const [showForm, setShowForm] = useState(false)
@@ -40,18 +39,12 @@ export default function TransactionsClient({
     router.push(`/transactions?dateFrom=${fromDate}&dateTo=${toDate}`)
   }
 
-  async function handleDelete(id, txDate, isClosed, category) {
+  async function handleDelete(id, txDate, category) {
     const isSale = category === 'ขายของ'
-    if (isSale) {
-      const msg = isClosed
-        ? 'รายการนี้เป็นการขายของและปิดยอดไปแล้ว\nลบแล้วสต๊อกจะถูกคืนกลับให้อัตโนมัติ\nยืนยันลบหรือไม่?'
-        : 'รายการนี้เป็นการขายของ\nลบแล้วสต๊อกจะถูกคืนกลับให้อัตโนมัติ\nยืนยันลบหรือไม่?'
-      if (!confirm(msg)) return
-    } else if (isClosed) {
-      if (!confirm('รายการนี้ปิดยอดประจำวันไปแล้ว\nยืนยันต้องการลบหรือไม่?')) return
-    } else {
-      if (!confirm('ลบรายการนี้?')) return
-    }
+    const msg = isSale
+      ? 'รายการนี้เป็นการขายของ\nลบแล้วสต๊อกจะถูกคืนกลับให้อัตโนมัติ\nยืนยันลบหรือไม่?'
+      : 'ลบรายการนี้?'
+    if (!confirm(msg)) return
     setDeletingId(id)
     const result = await deleteTransaction(id, txDate)
     setDeletingId(null)
@@ -119,12 +112,6 @@ export default function TransactionsClient({
             {showSellForm ? '✕ ปิด' : '🛒 บันทึกขายของ'}
           </button>
         )}
-        <DailyCloseButton
-          date={today}
-          alreadyClosed={alreadyClosed}
-          totalIncome={todayIncome}
-          totalExpense={todayExpense}
-        />
         <div className="flex-1" />
         <ExportButtons
           data={transactions}
@@ -227,16 +214,15 @@ export default function TransactionsClient({
                 <th className="table-th">ห้อง</th>
                 <th className="table-th text-right">จำนวนเงิน</th>
                 <th className="table-th">หมายเหตุ</th>
-                <th className="table-th">สถานะ</th>
                 <th className="table-th"></th>
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-100">
               {transactions.length === 0 && (
-                <tr><td colSpan={8} className="text-center text-gray-400 py-8">ไม่มีรายการ</td></tr>
+                <tr><td colSpan={7} className="text-center text-gray-400 py-8">ไม่มีรายการ</td></tr>
               )}
               {transactions.map(t => (
-                <tr key={t.id} className={`hover:bg-gray-50 ${t.is_closed ? 'opacity-70' : ''}`}>
+                <tr key={t.id} className="hover:bg-gray-50">
                   <td className="table-td">{formatDate(t.tx_date)}</td>
                   <td className="table-td"><TxTypeBadge type={t.tx_type} /></td>
                   <td className="table-td">{t.category}</td>
@@ -246,21 +232,13 @@ export default function TransactionsClient({
                   </td>
                   <td className="table-td text-gray-500">{t.note ?? '—'}</td>
                   <td className="table-td">
-                    {t.is_closed
-                      ? <span className="text-xs text-gray-500 flex items-center gap-1">🔒 ปิดยอดแล้ว</span>
-                      : <span className="text-xs text-green-600">● เปิด</span>
-                    }
-                  </td>
-                  <td className="table-td">
-                    {(!t.is_closed || isAdmin) && (
-                      <button
-                        onClick={() => handleDelete(t.id, t.tx_date, t.is_closed, t.category)}
-                        disabled={deletingId === t.id}
-                        className={`text-xs disabled:opacity-50 ${t.is_closed ? 'text-orange-400 hover:text-orange-600' : 'text-red-400 hover:text-red-600'}`}
-                      >
-                        ลบ
-                      </button>
-                    )}
+                    <button
+                      onClick={() => handleDelete(t.id, t.tx_date, t.category)}
+                      disabled={deletingId === t.id}
+                      className="text-xs text-red-400 hover:text-red-600 disabled:opacity-50"
+                    >
+                      ลบ
+                    </button>
                   </td>
                 </tr>
               ))}

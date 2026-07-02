@@ -284,12 +284,11 @@ export async function checkoutBooking(bookingId) {
 export async function cancelBooking(bookingId) {
   const supabase = await createClient()
 
-  // ลบ transactions ที่ยังไม่ปิดยอดที่ผูกกับ booking นี้
+  // ลบ transactions ที่ผูกกับ booking นี้
   await supabase
     .from('transactions')
     .delete()
     .eq('booking_id', bookingId)
-    .eq('is_closed', false)
 
   const { error } = await supabase
     .from('bookings')
@@ -394,7 +393,7 @@ export async function adminDeleteBooking(bookingId) {
   const { data: profile } = await supabase.from('profiles').select('role').eq('id', user.id).single()
   if (profile?.role !== 'admin') return { error: 'ไม่มีสิทธิ์ดำเนินการนี้' }
 
-  // ลบทุก transaction ที่ผูกกับ booking นี้ (รวมที่ปิดยอดแล้ว) ก่อนลบ booking
+  // ลบทุก transaction ที่ผูกกับ booking นี้ ก่อนลบ booking
   await supabase
     .from('transactions')
     .delete()

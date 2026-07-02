@@ -28,21 +28,9 @@ export default async function TransactionsPage({ searchParams }) {
 
   const [
     { data: transactions },
-    { data: todayClosed },
-    { data: allClosings },
     { data: saleItems },
   ] = await Promise.all([
     txQuery,
-    supabase
-      .from('daily_closings')
-      .select('id')
-      .eq('closing_date', today)
-      .single(),
-    supabase
-      .from('daily_closings')
-      .select('closing_date')
-      .order('closing_date', { ascending: false })
-      .limit(30),
     supabase
       .from('inventory_items')
       .select('id, name, unit, current_stock, sale_price')
@@ -72,8 +60,6 @@ export default async function TransactionsPage({ searchParams }) {
         to={to}
         todayIncome={todayIncome}
         todayExpense={todayExpense}
-        alreadyClosed={!!todayClosed}
-        closedDates={(allClosings ?? []).map(c => c.closing_date)}
         saleItems={saleItems ?? []}
         isAdmin={isAdmin}
       />

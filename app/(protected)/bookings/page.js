@@ -11,7 +11,7 @@ export default async function BookingsPage({ searchParams }) {
 
   let bookingsQuery = supabase
     .from('bookings')
-    .select('*, room:rooms(room_no, building), customer:customers(full_name, phone), transactions(id, is_closed)')
+    .select('*, room:rooms(room_no, building), customer:customers(full_name, phone), transactions(id)')
     .neq('status', 'cancelled')
     .order('checkin_date', { ascending: false })
     .limit(300)

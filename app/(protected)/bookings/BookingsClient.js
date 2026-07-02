@@ -226,13 +226,6 @@ export default function BookingsClient({ bookings, rooms, today, role, adminName
 
   async function handleEdit(e) {
     e.preventDefault()
-    const priceChanged = Number(editForm.price) !== Number(editBooking.price)
-    const depositChanged = Number(editForm.deposit) !== Number(editBooking.deposit)
-    const hasClosedTx = editBooking.transactions?.some(t => t.is_closed)
-
-    if ((priceChanged || depositChanged) && hasClosedTx) {
-      if (!confirm('รายการนี้ปิดยอดไปแล้ว การแก้ไขราคา/มัดจำจะอัปเดตยอดรายรับที่ผูกอยู่ด้วย ยืนยันหรือไม่?')) return
-    }
 
     if (editConflict) {
       if (!confirm(`ห้อง ${rooms.find(r => r.id === editForm.room_id)?.room_no} มีการจองของ ${editConflict.customer?.full_name ?? 'ลูกค้าอื่น'} ทับช่วงวันนี้อยู่แล้ว ยืนยันบันทึกทับหรือไม่?`)) return
@@ -264,11 +257,7 @@ export default function BookingsClient({ bookings, rooms, today, role, adminName
   }
 
   async function handleDelete(b) {
-    const hasClosedTx = b.transactions?.some(t => t.is_closed)
-    const msg = hasClosedTx
-      ? `ลบการจองห้อง ${b.room?.room_no ?? ''}?\n(มี transaction ที่ปิดยอดแล้วผูกอยู่ — จะถูกลบไปด้วย)`
-      : `ลบการจองห้อง ${b.room?.room_no ?? ''}?`
-    if (!confirm(msg)) return
+    if (!confirm(`ลบการจองห้อง ${b.room?.room_no ?? ''}?`)) return
     setLoadingId(b.id)
     const result = await adminDeleteBooking(b.id)
     setLoadingId(null)
@@ -574,9 +563,6 @@ export default function BookingsClient({ bookings, rooms, today, role, adminName
               <h3 className="text-base font-bold text-gray-900">
                 แก้ไข — {editBooking.customer?.full_name ?? ''}
               </h3>
-              {editBooking.transactions?.some(t => t.is_closed) && (
-                <span className="text-xs bg-amber-100 text-amber-700 px-2 py-1 rounded-full font-medium">🔒 ปิดยอดแล้ว</span>
-              )}
             </div>
 
             <form onSubmit={handleEdit} className="space-y-4">
