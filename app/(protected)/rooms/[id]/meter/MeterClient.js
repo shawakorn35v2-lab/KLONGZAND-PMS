@@ -288,9 +288,38 @@ export default function MeterClient({ readings, room }) {
       )}
 
       {/* Print Invoice Modal */}
-      {printRow && (
-        <div className="fixed inset-0 bg-black/50 flex items-end sm:items-center justify-center z-50 p-0 sm:p-4">
-          <div className="bg-white rounded-t-2xl sm:rounded-2xl shadow-2xl w-full sm:max-w-lg p-6 max-h-[90vh] overflow-y-auto">
+      {printRow && (() => {
+        const GREEN = '#2d5016'
+        const units = Number(printRow.curr_reading) - Number(printRow.prev_reading)
+        const invoiceRef2 = `IV-${String(printRow.billing_month).slice(0, 7)}-${room.room_no}`
+        const lineItems = []
+        if (Number(rentVal) > 0) {
+          lineItems.push({
+            label: 'ค่าเช่าห้องรายเดือน',
+            sub: 'Monthly rent',
+            amount: Number(rentVal),
+          })
+        }
+        lineItems.push({
+          label: 'ค่าไฟฟ้า',
+          sub: `${fmtN(units)} หน่วย × ${fmt(printRow.unit_price)} (มิเตอร์ ${fmtN(printRow.prev_reading)} → ${fmtN(printRow.curr_reading)})`,
+          amount: Number(printRow.electric_cost || 0),
+        })
+        lineItems.push({
+          label: 'ค่าน้ำ (เหมา)',
+          sub: 'Water (flat fee)',
+          amount: Number(printRow.water_flat_fee || 0),
+        })
+        validDeductions.forEach(d => {
+          lineItems.push({
+            label: d.desc,
+            sub: 'รายการเพิ่มเติม / Additional charge',
+            amount: Number(d.amount),
+          })
+        })
+        return (
+        <div className="fixed inset-0 bg-black/50 flex items-start justify-center z-50 p-2 sm:p-4 overflow-y-auto">
+          <div className="bg-white rounded-2xl shadow-2xl w-full sm:max-w-5xl p-4 sm:p-6 my-4 max-h-[95vh] overflow-y-auto">
             <h3 className="text-base font-bold text-gray-900 mb-1">ใบแจ้งหนี้ค่าเช่า</h3>
             <p className="text-sm text-gray-500 mb-4">ห้อง {room.room_no} — {formatMonth(printRow.billing_month)}</p>
 
@@ -318,68 +347,127 @@ export default function MeterClient({ readings, room }) {
 
             {/* Invoice preview — captured by html2canvas and exported to PDF */}
             <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">ตัวอย่างใบแจ้งหนี้</p>
-            <div ref={invoiceRef} className="bg-white border border-gray-200 rounded-lg p-5 text-sm">
-              <div className="text-center mb-4">
-                <p className="text-lg font-bold text-gray-900">KLONGZAND PMS</p>
-                <p className="text-sm text-gray-600">ใบแจ้งหนี้ค่าเช่า</p>
-              </div>
-              <div className="border-t border-gray-200 mb-3" />
-
-              <div className="flex justify-between mb-4 text-xs">
-                <div className="space-y-0.5">
-                  <p><span className="text-gray-500">ห้อง:</span> <span className="font-semibold text-gray-900">{room.room_no}</span> <span className="text-gray-500">อาคาร</span> {room.building}</p>
-                  <p><span className="text-gray-500">รอบบิล:</span> {formatMonth(printRow.billing_month)}</p>
+            <div className="flex justify-center">
+              <div
+                ref={invoiceRef}
+                className="bg-white p-8 shadow border border-gray-200"
+                style={{ width: '210mm', minHeight: '297mm', color: '#111' }}
+              >
+                {/* Header */}
+                <div
+                  className="flex justify-between items-start pb-3 mb-4"
+                  style={{ borderBottom: `3px solid ${GREEN}` }}
+                >
+                  <div className="flex items-start gap-3">
+                    <img
+                      src="/logo-full.png" alt="KLONG ZAND RESORT PHALA"
+                      style={{ width: '140px', height: 'auto', objectFit: 'contain' }}
+                    />
+                    <div className="text-xs text-gray-700 mt-1 leading-relaxed">
+                      <p className="font-bold text-sm" style={{ color: GREEN }}>KLONG ZAND RESORT PHALA</p>
+                      <p>โทร 095-8697918, 096-6762535</p>
+                      <p>156/29 หมู่ 6 ตำบลพลา</p>
+                      <p>อำเภอบ้านฉาง จังหวัดระยอง 21130</p>
+                    </div>
+                  </div>
+                  <div className="text-right">
+                    <p className="text-lg font-bold" style={{ color: GREEN }}>ใบแจ้งหนี้ค่าเช่า</p>
+                    <p className="text-sm text-gray-600">MONTHLY RENTAL INVOICE</p>
+                    <div className="mt-3 text-sm text-gray-800 space-y-0.5">
+                      <p><span className="text-gray-500">เลขที่ / No:</span> <span className="font-semibold">{invoiceRef2}</span></p>
+                      <p><span className="text-gray-500">รอบบิล / Period:</span> <span className="font-medium">{formatMonth(printRow.billing_month)}</span></p>
+                      <p><span className="text-gray-500">วันที่พิมพ์:</span> <span className="font-medium">{formatDate(getTodayString())}</span></p>
+                    </div>
+                  </div>
                 </div>
-                <div className="text-right">
-                  <p className="text-gray-500">วันที่พิมพ์</p>
-                  <p className="font-medium">{formatDate(getTodayString())}</p>
-                </div>
-              </div>
 
-              <table className="w-full text-xs mb-3">
-                <thead>
-                  <tr className="bg-blue-600 text-white">
-                    <th className="text-left px-2 py-1.5">รายการ</th>
-                    <th className="text-right px-2 py-1.5 w-28">จำนวนเงิน</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-gray-100">
+                {/* Room info */}
+                <div className="mb-4 text-sm space-y-1.5">
+                  <div className="flex gap-4">
+                    <div className="flex flex-1">
+                      <span className="text-gray-600 w-36 shrink-0">ห้อง / Room:</span>
+                      <span className="flex-1 border-b border-gray-300 px-2 font-semibold">{room.room_no}</span>
+                    </div>
+                    <div className="flex flex-1">
+                      <span className="text-gray-600 shrink-0">อาคาร / Building:</span>
+                      <span className="flex-1 border-b border-gray-300 px-2 ml-2">{room.building}</span>
+                    </div>
+                  </div>
                   {Number(rentVal) > 0 && (
-                    <tr>
-                      <td className="px-2 py-1.5">ค่าเช่าห้องรายเดือน</td>
-                      <td className="px-2 py-1.5 text-right font-medium">{fmt(rentVal)}</td>
-                    </tr>
+                    <div className="flex">
+                      <span className="text-gray-600 w-36 shrink-0">ค่าเช่ารายเดือน:</span>
+                      <span className="flex-1 border-b border-gray-300 px-2 font-medium">{fmt(rentVal)} / เดือน</span>
+                    </div>
                   )}
-                  <tr>
-                    <td className="px-2 py-1.5">
-                      ค่าไฟฟ้า ({fmtN(printRow.curr_reading - printRow.prev_reading)} หน่วย × {fmt(printRow.unit_price)})
-                      <div className="text-[10px] text-gray-500">
-                        มิเตอร์ {fmtN(printRow.prev_reading)} → {fmtN(printRow.curr_reading)}
-                      </div>
-                    </td>
-                    <td className="px-2 py-1.5 text-right font-medium">{fmt(printRow.electric_cost)}</td>
-                  </tr>
-                  <tr>
-                    <td className="px-2 py-1.5">ค่าน้ำ (เหมา)</td>
-                    <td className="px-2 py-1.5 text-right font-medium">{fmt(printRow.water_flat_fee)}</td>
-                  </tr>
-                  {validDeductions.map((d, i) => (
-                    <tr key={`d${i}`}>
-                      <td className="px-2 py-1.5">{d.desc}</td>
-                      <td className="px-2 py-1.5 text-right font-medium">{fmt(d.amount)}</td>
+                </div>
+
+                {/* Line-items table */}
+                <table
+                  className="w-full text-sm mb-4"
+                  style={{ borderCollapse: 'collapse', border: `1px solid ${GREEN}` }}
+                >
+                  <thead>
+                    <tr style={{ backgroundColor: GREEN, color: '#ffffff' }}>
+                      <th style={{ border: `1px solid ${GREEN}`, padding: '6px 8px', width: '48px' }}>ลำดับ<br/><span className="text-[10px] font-normal">No.</span></th>
+                      <th style={{ border: `1px solid ${GREEN}`, padding: '6px 8px', textAlign: 'left' }}>รายการ<br/><span className="text-[10px] font-normal">Description</span></th>
+                      <th style={{ border: `1px solid ${GREEN}`, padding: '6px 8px', width: '150px' }}>จำนวนเงิน (บาท)<br/><span className="text-[10px] font-normal">Amount</span></th>
                     </tr>
-                  ))}
-                </tbody>
-              </table>
+                  </thead>
+                  <tbody>
+                    {lineItems.map((it, i) => (
+                      <tr key={i}>
+                        <td style={{ border: `1px solid ${GREEN}`, padding: '6px 8px', textAlign: 'center', color: '#374151' }}>{i + 1}</td>
+                        <td style={{ border: `1px solid ${GREEN}`, padding: '6px 8px' }}>
+                          <div className="font-medium">{it.label}</div>
+                          {it.sub && <div className="text-[11px] text-gray-500 mt-0.5">{it.sub}</div>}
+                        </td>
+                        <td style={{ border: `1px solid ${GREEN}`, padding: '6px 8px', textAlign: 'right', fontWeight: 500 }}>{fmt(it.amount)}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
 
-              <div className="bg-blue-600 text-white rounded-md px-3 py-2 flex justify-between font-bold">
-                <span>รวมทั้งสิ้น</span>
-                <span>{fmt(grandTotal)}</span>
+                {/* Totals strip */}
+                <div className="flex justify-end mb-6">
+                  <div className="w-72 text-sm space-y-2">
+                    <div
+                      className="flex justify-between px-3 py-2 rounded font-bold text-base"
+                      style={{ backgroundColor: GREEN, color: '#ffffff' }}
+                    >
+                      <span>รวมทั้งสิ้น / Grand Total</span>
+                      <span>{fmt(grandTotal)}</span>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Payment note */}
+                <div className="mb-6 text-xs text-gray-600 border border-gray-300 rounded p-3">
+                  <p className="font-semibold mb-1" style={{ color: GREEN }}>วิธีชำระเงิน / Payment methods</p>
+                  <p>เงินสด (Cash) หรือโอนเงินเข้าบัญชีธนาคารตามที่แจ้ง</p>
+                  <p>กรุณาชำระภายในวันที่กำหนด — Please pay by the due date.</p>
+                </div>
+
+                {/* Signatures */}
+                <div className="flex gap-8 mt-10 mb-8 text-sm">
+                  <div className="flex-1 text-center">
+                    <div className="border-t border-gray-500 mx-6" />
+                    <p className="text-gray-700 mt-1">ผู้ทำรายการ / Staff</p>
+                  </div>
+                  <div className="flex-1 text-center">
+                    <div className="border-t border-gray-500 mx-6" />
+                    <p className="text-gray-700 mt-1">ผู้รับใบแจ้งหนี้ / Received by</p>
+                  </div>
+                </div>
+
+                {/* Footer */}
+                <div
+                  className="text-center font-semibold pt-2"
+                  style={{ borderTop: `2px solid ${GREEN}`, color: GREEN }}
+                >
+                  <p className="text-sm">ขอบคุณที่ใช้บริการ</p>
+                  <p className="text-xs">THANK YOU FOR YOUR SUPPORT</p>
+                </div>
               </div>
-
-              <p className="text-center text-[10px] text-gray-400 mt-3">
-                KLONGZAND PMS — ใบแจ้งหนี้นี้ออกโดยระบบอัตโนมัติ
-              </p>
             </div>
 
             <div className="flex gap-3 mt-4">
@@ -390,7 +478,8 @@ export default function MeterClient({ readings, room }) {
             </div>
           </div>
         </div>
-      )}
+        )
+      })()}
     </>
   )
 }

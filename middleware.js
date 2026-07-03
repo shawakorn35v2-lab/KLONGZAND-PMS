@@ -2,7 +2,7 @@ import { createServerClient } from '@supabase/ssr'
 import { NextResponse } from 'next/server'
 
 const ADMIN_ONLY_PATHS = ['/dashboard']
-const ADMIN_ONLY_PATTERNS = [/^\/rooms\/[^/]+\/meter(\/|$)/]
+const ADMIN_ONLY_PATTERNS = []
 
 export async function middleware(request) {
   let supabaseResponse = NextResponse.next({ request })

@@ -140,7 +140,7 @@ export default function RoomsTable({ rooms: initialRooms, isAdmin = false }) {
                 </button>
               </td>
               <td className="table-td">
-                {room.is_monthly && isAdmin && (
+                {room.is_monthly && (
                   <Link href={`/rooms/${room.id}/meter`} className="text-blue-600 hover:text-blue-800 text-xs font-medium">
                     ดูมิเตอร์
                   </Link>
