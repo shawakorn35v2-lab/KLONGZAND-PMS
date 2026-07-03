@@ -3,6 +3,7 @@
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { createReceipt, updateReceipt } from '@/app/actions/receipts'
+import { getTodayString } from '@/lib/dateUtils'
 
 function fmt(n) {
   return '฿' + Number(n || 0).toLocaleString('th-TH', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
@@ -53,6 +54,7 @@ export default function ReceiptForm({ initialReceipt = null }) {
   const seed = initialFormFromReceipt(initialReceipt)
   const [form, setForm] = useState(seed.form)
   const [items, setItems] = useState(seed.items)
+  const [receiptDate, setReceiptDate] = useState(initialReceipt?.receipt_date ?? getTodayString())
   const [editNote, setEditNote] = useState('')
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
@@ -96,6 +98,7 @@ export default function ReceiptForm({ initialReceipt = null }) {
       paymentOtherNote: form.paymentMethod === 'other' ? form.paymentOtherNote.trim() : '',
       remark: form.remark.trim(),
       discount,
+      receipt_date: receiptDate,
       items: items.filter(it => it.description.trim() || Number(it.quantity) > 0 || Number(it.unitPrice) > 0),
     }
 
@@ -127,6 +130,15 @@ export default function ReceiptForm({ initialReceipt = null }) {
       {/* Customer info */}
       <div className="card space-y-4">
         <h2 className="text-base font-semibold text-gray-900">ข้อมูลลูกค้า</h2>
+        <div>
+          <label className="label">วันที่ / Date *</label>
+          <input
+            type="date" required
+            value={receiptDate}
+            onChange={e => setReceiptDate(e.target.value)}
+            className="input"
+          />
+        </div>
         <div>
           <label className="label">ชื่อลูกค้า *</label>
           <input

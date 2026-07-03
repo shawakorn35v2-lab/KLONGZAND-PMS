@@ -85,7 +85,7 @@ export default function ReceiptsClient({ receipts, total, page, limit, search, i
               {receipts.map(r => (
                 <tr key={r.id} className="hover:bg-gray-50">
                   <td className="table-td font-medium text-blue-700">{r.receipt_no}</td>
-                  <td className="table-td">{formatDate(r.created_at)}</td>
+                  <td className="table-td">{formatDate(r.receipt_date ?? r.created_at)}</td>
                   <td className="table-td">{r.customer_name || '—'}</td>
                   <td className="table-td text-gray-600">{PAYMENT_LABELS[r.payment_method] ?? '—'}</td>
                   <td className="table-td text-right font-semibold text-green-700">{fmt(r.total_amount)}</td>

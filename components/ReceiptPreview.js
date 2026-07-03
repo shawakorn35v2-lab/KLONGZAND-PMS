@@ -86,7 +86,7 @@ export default function ReceiptPreview({ receipt }) {
               <p className="text-sm text-gray-600">RECEIPT</p>
               <div className="mt-3 text-sm text-gray-800 space-y-0.5">
                 <p><span className="text-gray-500">เลขที่ / No:</span> <span className="font-semibold">{receipt.receipt_no}</span></p>
-                <p><span className="text-gray-500">วันที่ / Date:</span> <span className="font-medium">{formatDate(receipt.created_at)}</span></p>
+                <p><span className="text-gray-500">วันที่ / Date:</span> <span className="font-medium">{formatDate(receipt.receipt_date ?? receipt.created_at)}</span></p>
               </div>
             </div>
           </div>

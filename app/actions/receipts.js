@@ -12,6 +12,15 @@ function bangkokDateStr() {
   return `${p.year}${p.month}${p.day}`
 }
 
+function bangkokIsoDate() {
+  const parts = new Intl.DateTimeFormat('en-CA', {
+    timeZone: 'Asia/Bangkok',
+    year: 'numeric', month: '2-digit', day: '2-digit',
+  }).formatToParts(new Date())
+  const p = Object.fromEntries(parts.map(({ type, value }) => [type, value]))
+  return `${p.year}-${p.month}-${p.day}`
+}
+
 function roundMoney(n) {
   return Math.round((Number(n) + Number.EPSILON) * 100) / 100
 }
@@ -41,6 +50,7 @@ function itemsSignature(items) {
 }
 
 const HEADER_FIELDS = [
+  ['receipt_date', 'วันที่ในใบเสร็จ'],
   ['customer_name', 'ชื่อลูกค้า'],
   ['customer_address', 'ที่อยู่'],
   ['customer_tel', 'เบอร์โทร'],
@@ -110,6 +120,7 @@ export async function createReceipt(payload) {
     remark = '',
     items = [],
     discount = 0,
+    receipt_date = null,
   } = payload ?? {}
 
   if (!['cash', 'transfer', 'other'].includes(paymentMethod)) {
@@ -124,6 +135,7 @@ export async function createReceipt(payload) {
   const subtotal = roundMoney(cleanItems.reduce((s, it) => s + it.amount, 0))
   const disc = Math.max(0, roundMoney(Number(discount) || 0))
   const total = Math.max(0, roundMoney(subtotal - disc))
+  const finalReceiptDate = receipt_date || bangkokIsoDate()
 
   // Generate receipt_no with retry on unique-violation race
   const dateStr = bangkokDateStr()
@@ -142,6 +154,7 @@ export async function createReceipt(payload) {
       .from('receipts')
       .insert({
         receipt_no: receiptNo,
+        receipt_date: finalReceiptDate,
         customer_name: customerName,
         customer_address: customerAddress,
         customer_tel: customerTel,
@@ -189,6 +202,7 @@ export async function updateReceipt(id, payload, note = '') {
     remark = '',
     items = [],
     discount = 0,
+    receipt_date = null,
   } = payload ?? {}
 
   if (!['cash', 'transfer', 'other'].includes(paymentMethod)) {
@@ -212,6 +226,7 @@ export async function updateReceipt(id, payload, note = '') {
   const total = Math.max(0, roundMoney(subtotal - disc))
 
   const nextHeader = {
+    receipt_date: receipt_date || current.receipt_date || bangkokIsoDate(),
     customer_name: customerName,
     customer_address: customerAddress,
     customer_tel: customerTel,
