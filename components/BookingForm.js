@@ -3,7 +3,8 @@
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import CustomerSearchInput from './CustomerSearchInput'
-import { createMultiBookings } from '@/app/actions/bookings'
+import BookingPrintPreview from './BookingPrintPreview'
+import { createMultiBookings, getBookingsByIds } from '@/app/actions/bookings'
 import { getTodayString } from '@/lib/dateUtils'
 import { createClient } from '@/lib/supabase-browser'
 
@@ -71,6 +72,7 @@ export default function BookingForm({ rooms, bookings, onClose }) {
   const [docPreviews, setDocPreviews] = useState({ idCard: null })
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
+  const [createdBookings, setCreatedBookings] = useState(null)
 
   const baseAvailable = getAvailableRooms(rooms, bookings, stayType, form.checkinDate, form.checkoutDate)
   function availableForRow(idx) {
@@ -159,13 +161,33 @@ export default function BookingForm({ rooms, bookings, onClose }) {
         checkoutTime: stayType === 'temporary' ? form.checkoutTime : null,
       })
       if (result.error) { setError(result.error); return }
-      router.refresh()
-      onClose?.()
+
+      const detail = await getBookingsByIds(result.bookingIds ?? [])
+      if (detail.error || !detail.data || detail.data.length === 0) {
+        // Fallback: if we couldn't load canonical rows, just close as before
+        router.refresh()
+        onClose?.()
+        return
+      }
+      setCreatedBookings(detail.data)
     } catch (err) {
       setError(err.message)
     } finally {
       setLoading(false)
     }
+  }
+
+  if (createdBookings) {
+    return (
+      <BookingPrintPreview
+        bookings={createdBookings}
+        onClose={() => {
+          setCreatedBookings(null)
+          router.refresh()
+          onClose?.()
+        }}
+      />
+    )
   }
 
   return (

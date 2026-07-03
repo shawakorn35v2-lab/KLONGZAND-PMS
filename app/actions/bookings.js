@@ -215,6 +215,26 @@ export async function createMultiBookings({ rooms, customerId, newCustomer, chan
   return { success: true, bookingIds: insertedBookingIds }
 }
 
+export async function getBookingsByIds(ids) {
+  const supabase = await createClient()
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) return { error: 'ไม่ได้เข้าสู่ระบบ' }
+  if (!Array.isArray(ids) || ids.length === 0) return { data: [] }
+
+  const { data, error } = await supabase
+    .from('bookings')
+    .select(`
+      id, channel, checkin_date, checkout_date, price, deposit, note,
+      id_card_url, vehicle_reg_url, stay_type, checkin_time, checkout_time, created_at,
+      customers(full_name, phone),
+      rooms(room_no, building)
+    `)
+    .in('id', ids)
+    .order('created_at')
+  if (error) return { error: error.message }
+  return { data: data ?? [] }
+}
+
 export async function checkinBooking(bookingId) {
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
