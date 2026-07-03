@@ -255,16 +255,26 @@ export async function checkinBooking(bookingId) {
 
   const remaining = roundCurrency(Number(booking.price) - Number(booking.deposit))
   if (remaining > 0) {
-    const roomNo = booking.rooms?.room_no ?? ''
-    await supabase.from('transactions').insert({
-      tx_date: getTodayString(),
-      tx_type: 'income',
-      category: 'ค่าห้อง',
-      amount: remaining,
-      note: roomNo ? `รับเงินเช็คอิน ห้อง ${roomNo} (ส่วนที่เหลือ)` : `รับเงินเช็คอิน (ส่วนที่เหลือ)`,
-      booking_id: bookingId,
-      created_by: user.id,
-    })
+    // Guard against duplicate check-in inserts (defense in depth against double-clicks)
+    const { data: existingTx } = await supabase
+      .from('transactions')
+      .select('id')
+      .eq('booking_id', bookingId)
+      .eq('category', 'ค่าห้อง')
+      .limit(1)
+
+    if (!existingTx || existingTx.length === 0) {
+      const roomNo = booking.rooms?.room_no ?? ''
+      await supabase.from('transactions').insert({
+        tx_date: getTodayString(),
+        tx_type: 'income',
+        category: 'ค่าห้อง',
+        amount: remaining,
+        note: roomNo ? `รับเงินเช็คอิน ห้อง ${roomNo} (ส่วนที่เหลือ)` : `รับเงินเช็คอิน (ส่วนที่เหลือ)`,
+        booking_id: bookingId,
+        created_by: user.id,
+      })
+    }
   }
 
   revalidatePath('/bookings')

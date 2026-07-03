@@ -225,7 +225,14 @@ export default function BookingsClient({ bookings, rooms, today, role, adminName
     }
   }
 
-  async function handleAction(action, id) {
+  async function handleAction(action, id, booking = null) {
+    if (action === 'checkin' && booking) {
+      const customerName = booking.customer?.full_name ?? 'ลูกค้า'
+      const roomNo = booking.room?.room_no ?? ''
+      if (!window.confirm(
+        `ยืนยันเช็คอิน ห้อง ${roomNo} — ${customerName}?\nรายการนี้จะสร้างรายรับในระบบ`
+      )) return
+    }
     setLoadingId(id)
     let result
     if (action === 'checkin') result = await checkinBooking(id)
@@ -528,7 +535,7 @@ export default function BookingsClient({ bookings, rooms, today, role, adminName
                   <td className="table-td">
                     <div className="flex flex-wrap gap-1.5">
                       {b.status === 'reserved' && (
-                        <button onClick={() => handleAction('checkin', b.id)} disabled={loadingId === b.id}
+                        <button onClick={() => handleAction('checkin', b.id, b)} disabled={loadingId === b.id}
                           className="px-2.5 py-1 text-xs bg-blue-600 text-white rounded hover:bg-blue-700 disabled:opacity-50">
                           เช็คอิน
                         </button>
