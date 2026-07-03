@@ -3,8 +3,9 @@
 import { useState, useMemo } from 'react'
 import { useRouter } from 'next/navigation'
 import BookingForm from '@/components/BookingForm'
+import BookingPrintPreview from '@/components/BookingPrintPreview'
 import { BookingStatusBadge, ChannelBadge } from '@/components/RoomStatusBadge'
-import { checkinBooking, checkoutBooking, cancelBooking, adminUpdateBooking, adminDeleteBooking } from '@/app/actions/bookings'
+import { checkinBooking, checkoutBooking, cancelBooking, adminUpdateBooking, adminDeleteBooking, getBookingsByIds } from '@/app/actions/bookings'
 import { formatDate, formatShortDate } from '@/lib/dateUtils'
 import { createClient } from '@/lib/supabase-browser'
 
@@ -103,6 +104,10 @@ export default function BookingsClient({ bookings, rooms, today, role, adminName
 
   // Cell popup (click red cell to view bookings)
   const [cellPopup, setCellPopup] = useState(null)
+
+  // Print preview state
+  const [printBookings, setPrintBookings] = useState(null)
+  const [printLoading, setPrintLoading] = useState(null)
 
   const filtered = bookings.filter(b => !statusFilter || b.status === statusFilter)
 
@@ -208,6 +213,16 @@ export default function BookingsClient({ bookings, rooms, today, role, adminName
     setDocPreviews(p => ({ ...p, [field]: null }))
     setDocSignedUrls(p => ({ ...p, [field]: null }))
     setEdit('id_card_url', null)
+  }
+
+  async function handlePrint(bookingId) {
+    setPrintLoading(bookingId)
+    try {
+      const result = await getBookingsByIds([bookingId])
+      if (result?.data?.length) setPrintBookings(result.data)
+    } finally {
+      setPrintLoading(null)
+    }
   }
 
   async function handleAction(action, id) {
@@ -542,6 +557,13 @@ export default function BookingsClient({ bookings, rooms, today, role, adminName
                           🗑 ลบ
                         </button>
                       )}
+                      <button
+                        onClick={() => handlePrint(b.id)}
+                        disabled={printLoading === b.id}
+                        className="px-2.5 py-1 text-xs bg-teal-600 text-white rounded hover:bg-teal-700 disabled:opacity-50"
+                      >
+                        {printLoading === b.id ? '...' : '🖨 ปริ้น'}
+                      </button>
                       {b.note && <span title={b.note} className="text-gray-400 cursor-help">📝</span>}
                       {(b.id_card_url || b.vehicle_reg_url) && (
                         <span title="มีเอกสารแนบ" className="text-blue-400 cursor-help">📎</span>
@@ -790,19 +812,44 @@ export default function BookingsClient({ bookings, rooms, today, role, adminName
                       <div className="col-span-2 text-gray-500">📝 {b.note}</div>
                     )}
                   </div>
-                  {canEdit && (
-                    <div className="pt-2">
+                  <div className="pt-2 flex gap-2">
+                    {canEdit && (
                       <button
                         onClick={() => { setCellPopup(null); openEdit(b) }}
-                        className="w-full px-3 py-1.5 text-xs bg-amber-500 text-white rounded hover:bg-amber-600"
+                        className="flex-1 px-3 py-1.5 text-xs bg-amber-500 text-white rounded hover:bg-amber-600"
                       >
                         ✏ แก้ไขการจองนี้
                       </button>
-                    </div>
-                  )}
+                    )}
+                    <button
+                      onClick={() => { setCellPopup(null); handlePrint(b.id) }}
+                      disabled={printLoading === b.id}
+                      className="flex-1 px-3 py-1.5 text-xs bg-teal-600 text-white rounded hover:bg-teal-700 disabled:opacity-50"
+                    >
+                      {printLoading === b.id ? '...' : '🖨 ปริ้น'}
+                    </button>
+                  </div>
                 </div>
               ))}
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* Print preview modal */}
+      {printBookings && (
+        <div
+          className="fixed inset-0 bg-black/50 flex items-start justify-center z-50 p-4 overflow-y-auto"
+          onClick={() => setPrintBookings(null)}
+        >
+          <div
+            className="bg-white rounded-2xl shadow-2xl w-full max-w-5xl p-4 my-4"
+            onClick={e => e.stopPropagation()}
+          >
+            <BookingPrintPreview
+              bookings={printBookings}
+              onClose={() => setPrintBookings(null)}
+            />
           </div>
         </div>
       )}
