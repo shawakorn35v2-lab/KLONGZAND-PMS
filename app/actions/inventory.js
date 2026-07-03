@@ -90,6 +90,45 @@ export async function updateInventoryItem(id, fields) {
   return {}
 }
 
+export async function adjustStock({ item_id, new_stock, note }) {
+  const supabase = await createClient()
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) return { error: 'ไม่ได้เข้าสู่ระบบ' }
+  const { data: profile } = await supabase.from('profiles').select('role').eq('id', user.id).single()
+  if (profile?.role !== 'admin') return { error: 'เฉพาะแอดมินเท่านั้น' }
+
+  const target = Number(new_stock)
+  if (!Number.isFinite(target) || target < 0) return { error: 'จำนวนไม่ถูกต้อง' }
+
+  const { data: item, error: itemErr } = await supabase
+    .from('inventory_items').select('name, unit, current_stock').eq('id', item_id).single()
+  if (itemErr || !item) return { error: 'ไม่พบรายการ' }
+
+  const current = Number(item.current_stock)
+  const delta = Number((target - current).toFixed(2))
+  if (delta === 0) return {}
+
+  const reason = (note || '').trim()
+  const movementNote = reason
+    ? `ปรับสต๊อก: ${reason}`
+    : `ปรับสต๊อก (${formatQty(current)} → ${formatQty(target)} ${item.unit})`
+
+  const { error } = await supabase.from('inventory_movements').insert({
+    item_id,
+    movement_type: delta > 0 ? 'stock_in' : 'stock_out',
+    quantity: Math.abs(delta),
+    note: movementNote,
+    created_by: user.id,
+  })
+  if (error) return { error: error.message }
+  revalidatePath('/inventory')
+  return {}
+}
+
+function formatQty(n) {
+  return Number(n || 0).toLocaleString('th-TH', { minimumFractionDigits: 0, maximumFractionDigits: 2 })
+}
+
 export async function addStockMovement({ item_id, movement_type, quantity, room_id, unit_cost, note }) {
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()

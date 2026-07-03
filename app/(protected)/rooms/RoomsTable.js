@@ -52,7 +52,7 @@ function EditableCell({ value, onSave, type = 'text', options }) {
   )
 }
 
-export default function RoomsTable({ rooms: initialRooms }) {
+export default function RoomsTable({ rooms: initialRooms, isAdmin = false }) {
   const router = useRouter()
   const [rooms, setRooms] = useState(initialRooms)
   const [pending, startTransition] = useTransition()
@@ -140,7 +140,7 @@ export default function RoomsTable({ rooms: initialRooms }) {
                 </button>
               </td>
               <td className="table-td">
-                {room.is_monthly && (
+                {room.is_monthly && isAdmin && (
                   <Link href={`/rooms/${room.id}/meter`} className="text-blue-600 hover:text-blue-800 text-xs font-medium">
                     ดูมิเตอร์
                   </Link>

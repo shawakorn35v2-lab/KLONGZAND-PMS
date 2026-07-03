@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation'
 import {
   addStockMovement, createInventoryRequest, updateRequestStatus,
   createInventoryItem, seedCommonAreaItems, updateInventoryItem, sellItem,
-  createSaleItem, convertToSaleItem,
+  createSaleItem, convertToSaleItem, adjustStock,
 } from '@/app/actions/inventory'
 import { formatDateTime } from '@/lib/dateUtils'
 
@@ -53,6 +53,12 @@ export default function InventoryClient({ items, movements, requests, rooms, rol
   const [editCoreForm, setEditCoreForm] = useState({ name: '', unit: '', reorder_point: '' })
   const [editCoreLoading, setEditCoreLoading] = useState(false)
   const [editCoreError, setEditCoreError] = useState('')
+
+  // Adjust stock (admin only) — set current_stock directly
+  const [adjustModal, setAdjustModal] = useState(null)
+  const [adjustForm, setAdjustForm] = useState({ new_stock: '', note: '' })
+  const [adjustLoading, setAdjustLoading] = useState(false)
+  const [adjustError, setAdjustError] = useState('')
 
   // Sell modal
   const [sellModal, setSellModal] = useState(null)
@@ -163,6 +169,27 @@ export default function InventoryClient({ items, movements, requests, rooms, rol
     setEditCoreLoading(false)
     if (result.error) { setEditCoreError(result.error); return }
     setEditCoreItem(null)
+    router.refresh()
+  }
+
+  function openAdjustModal(item) {
+    setAdjustModal(item)
+    setAdjustForm({ new_stock: String(item.current_stock ?? 0), note: '' })
+    setAdjustError('')
+  }
+
+  async function handleAdjustStock(e) {
+    e.preventDefault()
+    setAdjustError('')
+    if (adjustForm.new_stock === '' || Number.isNaN(Number(adjustForm.new_stock))) {
+      setAdjustError('กรุณากรอกจำนวนคงเหลือ'); return
+    }
+    if (Number(adjustForm.new_stock) < 0) { setAdjustError('จำนวนต้องไม่ติดลบ'); return }
+    setAdjustLoading(true)
+    const result = await adjustStock({ item_id: adjustModal.id, new_stock: adjustForm.new_stock, note: adjustForm.note })
+    setAdjustLoading(false)
+    if (result.error) { setAdjustError(result.error); return }
+    setAdjustModal(null)
     router.refresh()
   }
 
@@ -434,6 +461,10 @@ export default function InventoryClient({ items, movements, requests, rooms, rol
                             )}
                             {isAdmin && (
                               <>
+                                <button onClick={() => openAdjustModal(item)}
+                                  className="px-2.5 py-1 text-xs bg-amber-500 text-white rounded hover:bg-amber-600 font-medium">
+                                  🔧 ปรับจำนวน
+                                </button>
                                 <button onClick={() => openEditCore(item)}
                                   className="px-2.5 py-1 text-xs bg-blue-600 text-white rounded hover:bg-blue-700 font-medium">
                                   ✏ แก้ไข
@@ -617,6 +648,10 @@ export default function InventoryClient({ items, movements, requests, rooms, rol
                             </button>
                             {isAdmin && (
                               <>
+                                <button onClick={() => openAdjustModal(item)}
+                                  className="px-2.5 py-1 text-xs bg-amber-500 text-white rounded hover:bg-amber-600 font-medium">
+                                  🔧 ปรับจำนวน
+                                </button>
                                 <button onClick={() => openEditCore(item)}
                                   className="px-2.5 py-1 text-xs bg-blue-600 text-white rounded hover:bg-blue-700 font-medium">
                                   ✏ แก้ไข
@@ -903,6 +938,60 @@ export default function InventoryClient({ items, movements, requests, rooms, rol
           </div>
         </div>
       )}
+
+      {/* ── MODAL: ปรับจำนวนคงเหลือ (admin) ── */}
+      {adjustModal && isAdmin && (() => {
+        const current = Number(adjustModal.current_stock || 0)
+        const target = Number(adjustForm.new_stock)
+        const validTarget = adjustForm.new_stock !== '' && !Number.isNaN(target) && target >= 0
+        const delta = validTarget ? Number((target - current).toFixed(2)) : 0
+        return (
+          <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+            <div className="bg-white rounded-2xl shadow-2xl w-full max-w-sm p-6">
+              <h3 className="text-base font-bold text-gray-900 mb-1">🔧 ปรับจำนวนคงเหลือ</h3>
+              <p className="text-sm text-gray-500 mb-4">{adjustModal.name}</p>
+              <div className="bg-gray-50 rounded-lg p-3 mb-4 text-sm">
+                <div className="flex justify-between">
+                  <span className="text-gray-500">สต๊อกปัจจุบัน</span>
+                  <span className="font-semibold">{formatNum(current)} {adjustModal.unit}</span>
+                </div>
+              </div>
+              <form onSubmit={handleAdjustStock} className="space-y-3">
+                <div>
+                  <label className="label">จำนวนคงเหลือใหม่ *</label>
+                  <input type="number" required min="0" step="0.01" inputMode="decimal"
+                    value={adjustForm.new_stock}
+                    onChange={e => setAdjustForm(p => ({ ...p, new_stock: e.target.value }))}
+                    onWheel={e => e.currentTarget.blur()}
+                    className="input" placeholder="0" autoFocus />
+                  {validTarget && delta !== 0 && (
+                    <p className={`text-xs mt-1 ${delta > 0 ? 'text-green-700' : 'text-orange-700'}`}>
+                      {delta > 0 ? '+' : ''}{formatNum(delta)} {adjustModal.unit} จากยอดปัจจุบัน
+                    </p>
+                  )}
+                  {validTarget && delta === 0 && (
+                    <p className="text-xs mt-1 text-gray-500">ยอดเท่าเดิม — จะไม่มีการบันทึก</p>
+                  )}
+                </div>
+                <div>
+                  <label className="label">เหตุผล / หมายเหตุ</label>
+                  <input type="text" value={adjustForm.note}
+                    onChange={e => setAdjustForm(p => ({ ...p, note: e.target.value }))}
+                    className="input" placeholder="เช่น นับสต๊อกใหม่, ของหาย, แตกเสียหาย" />
+                </div>
+                {adjustError && <p className="text-sm text-red-600 bg-red-50 px-3 py-2 rounded-lg">{adjustError}</p>}
+                <div className="flex gap-3 pt-1">
+                  <button type="submit" disabled={adjustLoading || !validTarget}
+                    className="flex-1 py-2.5 bg-amber-500 text-white text-sm font-medium rounded-lg hover:bg-amber-600 disabled:opacity-50 transition-colors">
+                    {adjustLoading ? 'กำลังบันทึก...' : '🔧 บันทึกการปรับ'}
+                  </button>
+                  <button type="button" onClick={() => setAdjustModal(null)} className="btn-secondary">ยกเลิก</button>
+                </div>
+              </form>
+            </div>
+          </div>
+        )
+      })()}
 
       {/* ── MODAL: ตั้งค่าสินค้าขาย (admin) ── */}
       {editItem && isAdmin && (

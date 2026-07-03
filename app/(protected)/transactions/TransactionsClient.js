@@ -257,13 +257,17 @@ export default function TransactionsClient({
                   </td>
                   <td className="table-td text-gray-500">{t.note ?? '—'}</td>
                   <td className="table-td">
-                    <button
-                      onClick={() => handleDelete(t.id, t.tx_date, t.category)}
-                      disabled={deletingId === t.id}
-                      className="text-xs text-red-400 hover:text-red-600 disabled:opacity-50"
-                    >
-                      ลบ
-                    </button>
+                    {isAdmin ? (
+                      <button
+                        onClick={() => handleDelete(t.id, t.tx_date, t.category)}
+                        disabled={deletingId === t.id}
+                        className="text-xs text-red-400 hover:text-red-600 disabled:opacity-50"
+                      >
+                        ลบ
+                      </button>
+                    ) : (
+                      <span className="text-xs text-gray-300">—</span>
+                    )}
                   </td>
                 </tr>
               ))}

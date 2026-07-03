@@ -1,7 +1,8 @@
 import { createServerClient } from '@supabase/ssr'
 import { NextResponse } from 'next/server'
 
-const ADMIN_ONLY_PATHS = ['/dashboard', '/rooms']
+const ADMIN_ONLY_PATHS = ['/dashboard']
+const ADMIN_ONLY_PATTERNS = [/^\/rooms\/[^/]+\/meter(\/|$)/]
 
 export async function middleware(request) {
   let supabaseResponse = NextResponse.next({ request })
@@ -42,7 +43,11 @@ export async function middleware(request) {
     return NextResponse.redirect(url)
   }
 
-  if (user && ADMIN_ONLY_PATHS.some(p => pathname.startsWith(p))) {
+  const isAdminPath =
+    ADMIN_ONLY_PATHS.some(p => pathname.startsWith(p)) ||
+    ADMIN_ONLY_PATTERNS.some(re => re.test(pathname))
+
+  if (user && isAdminPath) {
     const { data: profile } = await supabase
       .from('profiles')
       .select('role')

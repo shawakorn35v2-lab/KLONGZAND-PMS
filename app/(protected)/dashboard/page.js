@@ -4,6 +4,7 @@ import MonthlySalesChart from '@/components/charts/MonthlySalesChart'
 import ChannelChart from '@/components/charts/ChannelChart'
 import OccupancyChart from '@/components/charts/OccupancyChart'
 import OccupancyMonthCard from '@/components/OccupancyMonthCard'
+import MonthlyFinanceCard from '@/components/MonthlyFinanceCard'
 import ExportButtons from '@/components/ExportButtons'
 import InvestmentTracker from '@/components/InvestmentTracker'
 import { getTodayString, formatLongDate } from '@/lib/dateUtils'
@@ -29,7 +30,6 @@ function StatCard({ label, value, sub, color }) {
 export default async function DashboardPage() {
   const supabase = await createClient()
   const today = getTodayString()
-  const monthStart = today.slice(0, 7) + '-01'
   const now = new Date()
   const agoDate = new Date(now.getFullYear(), now.getMonth() - 11, 1)
   const twelveMonthsAgo = `${agoDate.getFullYear()}-${String(agoDate.getMonth() + 1).padStart(2, '0')}-01`
@@ -38,7 +38,6 @@ export default async function DashboardPage() {
     { data: rooms },
     { data: activeBookings },
     { data: todayTxs },
-    { data: monthTxs },
     { data: yearTxs },
     { data: allBookings },
     { data: allTimeTxs },
@@ -49,8 +48,7 @@ export default async function DashboardPage() {
     supabase.from('rooms').select('*').eq('is_active', true).order('room_no'),
     supabase.from('bookings').select('room_id, status').in('status', ['reserved', 'checked_in']),
     supabase.from('transactions').select('tx_type, amount').eq('tx_date', today),
-    supabase.from('transactions').select('tx_type, amount').gte('tx_date', monthStart),
-    supabase.from('transactions').select('tx_date, tx_type, amount').gte('tx_date', twelveMonthsAgo),
+    supabase.from('transactions').select('tx_date, tx_type, amount, category').gte('tx_date', twelveMonthsAgo),
     supabase.from('bookings').select('room_id, channel, price, status').gte('checkin_date', twelveMonthsAgo),
     supabase.from('transactions').select('tx_date, tx_type, amount'),
     supabase.from('bookings').select('*', { count: 'exact', head: true }),
@@ -65,7 +63,6 @@ export default async function DashboardPage() {
   }
 
   const todayStats = calcStats(todayTxs)
-  const monthStats = calcStats(monthTxs)
 
   const checkedInCount = (activeBookings ?? []).filter(b => b.status === 'checked_in').length
   const totalRooms = (rooms ?? []).length
@@ -149,14 +146,10 @@ export default async function DashboardPage() {
         </div>
       </div>
 
-      {/* Month stats */}
+      {/* Month stats (with month selector) */}
       <div>
-        <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-3">เดือนนี้</p>
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-          <StatCard label="รายรับเดือนนี้" value={fmt(monthStats.income)} color="green" />
-          <StatCard label="รายจ่ายเดือนนี้" value={fmt(monthStats.expense)} color="red" />
-          <StatCard label="กำไรสุทธิเดือนนี้" value={fmt(monthStats.net)} color={monthStats.net >= 0 ? 'blue' : 'red'} />
-        </div>
+        <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-3">รายรับ-รายจ่ายรายเดือน</p>
+        <MonthlyFinanceCard transactions={yearTxs ?? []} initialMonth={currentMonth} />
       </div>
 
       {/* All-time cumulative stats */}
