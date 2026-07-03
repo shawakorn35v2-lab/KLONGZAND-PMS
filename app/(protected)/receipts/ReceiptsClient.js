@@ -97,6 +97,12 @@ export default function ReceiptsClient({ receipts, total, page, limit, search, i
                       >
                         📄 ดู/พิมพ์
                       </Link>
+                      <Link
+                        href={`/receipts/${r.id}/edit`}
+                        className="px-2 py-1 text-xs bg-amber-500 text-white rounded hover:bg-amber-600"
+                      >
+                        ✏ แก้ไข
+                      </Link>
                       {isAdmin && (
                         <button
                           onClick={() => handleDelete(r.id, r.receipt_no)}

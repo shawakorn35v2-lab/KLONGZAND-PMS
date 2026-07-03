@@ -2,7 +2,7 @@
 
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
-import { createReceipt } from '@/app/actions/receipts'
+import { createReceipt, updateReceipt } from '@/app/actions/receipts'
 
 function fmt(n) {
   return '฿' + Number(n || 0).toLocaleString('th-TH', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
@@ -16,19 +16,44 @@ const PAYMENT_OPTIONS = [
   { value: 'other', label: 'อื่นๆ' },
 ]
 
-export default function ReceiptForm() {
+function initialFormFromReceipt(r) {
+  if (!r) {
+    return {
+      form: {
+        customerName: '', customerAddress: '', customerTel: '', customerTaxId: '',
+        paymentMethod: 'cash', paymentOtherNote: '', remark: '', discount: '',
+      },
+      items: [emptyItem(), emptyItem(), emptyItem()],
+    }
+  }
+  const items = (r.items ?? []).map(it => ({
+    description: it.description ?? '',
+    quantity: it.quantity == null ? '' : String(it.quantity),
+    unitPrice: it.unit_price == null ? '' : String(it.unit_price),
+  }))
+  while (items.length < 1) items.push(emptyItem())
+  return {
+    form: {
+      customerName: r.customer_name ?? '',
+      customerAddress: r.customer_address ?? '',
+      customerTel: r.customer_tel ?? '',
+      customerTaxId: r.customer_tax_id ?? '',
+      paymentMethod: r.payment_method ?? 'cash',
+      paymentOtherNote: r.payment_other_note ?? '',
+      remark: r.remark ?? '',
+      discount: r.discount == null ? '' : String(r.discount),
+    },
+    items,
+  }
+}
+
+export default function ReceiptForm({ initialReceipt = null }) {
   const router = useRouter()
-  const [form, setForm] = useState({
-    customerName: '',
-    customerAddress: '',
-    customerTel: '',
-    customerTaxId: '',
-    paymentMethod: 'cash',
-    paymentOtherNote: '',
-    remark: '',
-    discount: '',
-  })
-  const [items, setItems] = useState([emptyItem(), emptyItem(), emptyItem()])
+  const isEdit = !!initialReceipt
+  const seed = initialFormFromReceipt(initialReceipt)
+  const [form, setForm] = useState(seed.form)
+  const [items, setItems] = useState(seed.items)
+  const [editNote, setEditNote] = useState('')
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
 
@@ -62,7 +87,7 @@ export default function ReceiptForm() {
     if (!hasAnyItem) { setError('กรุณากรอกอย่างน้อย 1 รายการ'); return }
 
     setLoading(true)
-    const result = await createReceipt({
+    const payload = {
       customerName: form.customerName.trim(),
       customerAddress: form.customerAddress.trim(),
       customerTel: form.customerTel.trim(),
@@ -72,13 +97,33 @@ export default function ReceiptForm() {
       remark: form.remark.trim(),
       discount,
       items: items.filter(it => it.description.trim() || Number(it.quantity) > 0 || Number(it.unitPrice) > 0),
-    })
+    }
+
+    const result = isEdit
+      ? await updateReceipt(initialReceipt.id, payload, editNote.trim())
+      : await createReceipt(payload)
+
     if (result.error) { setError(result.error); setLoading(false); return }
-    router.push(`/receipts/${result.id}`)
+
+    if (isEdit) {
+      router.push(`/receipts/${initialReceipt.id}`)
+      router.refresh()
+    } else {
+      router.push(`/receipts/${result.id}`)
+    }
   }
 
   return (
     <form onSubmit={handleSubmit} className="space-y-6">
+      {isEdit && (
+        <div className="card bg-amber-50 border border-amber-200 flex flex-wrap items-center gap-3">
+          <span className="text-sm text-amber-800">
+            กำลังแก้ไขใบเสร็จเลขที่ <span className="font-semibold">{initialReceipt.receipt_no}</span>
+            {' — '}เลขที่จะไม่เปลี่ยน
+          </span>
+        </div>
+      )}
+
       {/* Customer info */}
       <div className="card space-y-4">
         <h2 className="text-base font-semibold text-gray-900">ข้อมูลลูกค้า</h2>
@@ -256,13 +301,34 @@ export default function ReceiptForm() {
         </div>
       </div>
 
+      {isEdit && (
+        <div className="card">
+          <label className="label">เหตุผลการแก้ไข (ไม่บังคับ)</label>
+          <input
+            type="text" value={editNote}
+            onChange={e => setEditNote(e.target.value)}
+            className="input"
+            placeholder="เช่น พิมพ์ชื่อลูกค้าผิด, ลูกค้าขอเพิ่มรายการ"
+          />
+          <p className="text-xs text-gray-500 mt-1">
+            ระบบจะบันทึกประวัติการแก้ไขไว้ในหน้ารายละเอียดใบเสร็จ
+          </p>
+        </div>
+      )}
+
       {error && <p className="text-sm text-red-600 bg-red-50 px-3 py-2 rounded-lg">{error}</p>}
 
       <div className="flex gap-3 flex-wrap">
         <button type="submit" disabled={loading} className="btn-primary">
-          {loading ? 'กำลังบันทึก...' : '💾 บันทึกและดูใบเสร็จ'}
+          {loading
+            ? 'กำลังบันทึก...'
+            : isEdit ? '💾 บันทึกการแก้ไข' : '💾 บันทึกและดูใบเสร็จ'}
         </button>
-        <button type="button" onClick={() => router.push('/receipts')} className="btn-secondary">
+        <button
+          type="button"
+          onClick={() => router.push(isEdit ? `/receipts/${initialReceipt.id}` : '/receipts')}
+          className="btn-secondary"
+        >
           ยกเลิก
         </button>
       </div>

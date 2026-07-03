@@ -2,7 +2,7 @@
 
 import { useRef, useState } from 'react'
 import Link from 'next/link'
-import { formatDate } from '@/lib/dateUtils'
+import { formatDate, formatDateTime } from '@/lib/dateUtils'
 
 function fmt(n) {
   return Number(n || 0).toLocaleString('th-TH', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
@@ -44,9 +44,17 @@ export default function ReceiptPreview({ receipt }) {
     <div className="space-y-4">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <Link href="/receipts" className="text-sm text-blue-600 hover:text-blue-800">← กลับไปรายการใบเสร็จ</Link>
-        <button onClick={handlePrint} disabled={printing} className="btn-primary">
-          {printing ? 'กำลังสร้าง PDF...' : '🖨 พิมพ์/ดาวน์โหลด PDF'}
-        </button>
+        <div className="flex flex-wrap items-center gap-2">
+          <Link
+            href={`/receipts/${receipt.id}/edit`}
+            className="px-3 py-2 text-sm font-medium bg-amber-500 text-white rounded-lg hover:bg-amber-600"
+          >
+            ✏ แก้ไข
+          </Link>
+          <button onClick={handlePrint} disabled={printing} className="btn-primary">
+            {printing ? 'กำลังสร้าง PDF...' : '🖨 พิมพ์/ดาวน์โหลด PDF'}
+          </button>
+        </div>
       </div>
 
       <div className="flex justify-center">
@@ -209,6 +217,51 @@ export default function ReceiptPreview({ receipt }) {
             <p className="text-xs">THANK YOU FOR YOUR SUPPORT</p>
           </div>
         </div>
+      </div>
+
+      {/* Edit timeline (not included in the printed PDF) */}
+      <div className="max-w-3xl mx-auto card">
+        <div className="flex items-center justify-between mb-3">
+          <h2 className="text-base font-semibold text-gray-900">ประวัติการแก้ไข</h2>
+          {(receipt.edits?.length ?? 0) > 0 && (
+            <span className="text-xs bg-amber-100 text-amber-700 px-2 py-0.5 rounded-full font-medium">
+              แก้ไข {receipt.edits.length} ครั้ง
+            </span>
+          )}
+        </div>
+        <ol className="relative border-l-2 border-gray-200 ml-2">
+          {(receipt.edits ?? []).map(ed => (
+            <li key={ed.id} className="ml-4 pb-4 last:pb-0">
+              <span className="absolute -left-[7px] w-3 h-3 rounded-full bg-amber-500 border-2 border-white" />
+              <p className="text-sm font-medium text-gray-900">
+                {formatDateTime(ed.edited_at)}
+                <span className="ml-2 font-normal text-gray-500">
+                  โดย {ed.editor?.full_name ?? '—'}
+                </span>
+              </p>
+              {(ed.changed_fields?.length ?? 0) > 0 ? (
+                <p className="text-sm text-gray-700 mt-0.5">
+                  แก้ไข: <span className="font-medium">{ed.changed_fields.join(', ')}</span>
+                </p>
+              ) : (
+                <p className="text-sm text-gray-500 mt-0.5 italic">(ไม่มีการเปลี่ยนแปลงข้อมูล)</p>
+              )}
+              {ed.note && (
+                <p className="text-xs text-gray-500 mt-0.5">หมายเหตุ: {ed.note}</p>
+              )}
+            </li>
+          ))}
+          <li className="ml-4">
+            <span className="absolute -left-[7px] w-3 h-3 rounded-full bg-green-500 border-2 border-white" />
+            <p className="text-sm font-medium text-gray-900">
+              {formatDateTime(receipt.created_at)}
+              <span className="ml-2 font-normal text-gray-500">สร้างใบเสร็จ</span>
+            </p>
+            <p className="text-xs text-gray-500 mt-0.5">
+              เลขที่ <span className="font-medium">{receipt.receipt_no}</span> — เลขที่นี้จะไม่เปลี่ยนแม้แก้ไข
+            </p>
+          </li>
+        </ol>
       </div>
     </div>
   )
