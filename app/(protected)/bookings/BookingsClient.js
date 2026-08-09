@@ -126,20 +126,21 @@ export default function BookingsClient({ bookings, rooms, today, role, adminName
   const occupiedMap = useMemo(() => {
     const map = new Map()
     bookings.forEach(b => {
-      if (b.status === 'cancelled' || b.status === 'checked_out') return
+      if (b.status === 'cancelled') return
       days.forEach(d => {
         const isOccupied = b.stay_type === 'temporary'
           ? b.checkin_date === d
           : b.checkin_date <= d && b.checkout_date > d
-        if (isOccupied) {
-          const key = `${b.room_id}__${d}`
-          if (!map.has(key)) map.set(key, [])
-          map.get(key).push(b)
-        }
+        if (!isOccupied) return
+        // วันนี้/อนาคต: checked_out ถือว่าห้องว่างแล้ว; วันที่ผ่านมา: แสดงไว้เป็นประวัติ
+        if (b.status === 'checked_out' && d >= today) return
+        const key = `${b.room_id}__${d}`
+        if (!map.has(key)) map.set(key, [])
+        map.get(key).push(b)
       })
     })
     return map
-  }, [bookings, days])
+  }, [bookings, days, today])
 
   function applyBookingFilter() {
     const params = new URLSearchParams()
