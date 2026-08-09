@@ -25,6 +25,7 @@ function getAvailableRooms(rooms, bookings, stayType, checkinDate, checkoutDate)
       (bookings ?? [])
         .filter(b =>
           b.status !== 'cancelled' &&
+          b.status !== 'checked_out' &&
           b.stay_type !== 'temporary' &&
           b.checkin_date <= checkinDate &&
           b.checkout_date > checkinDate
@@ -37,7 +38,7 @@ function getAvailableRooms(rooms, bookings, stayType, checkinDate, checkoutDate)
   if (!checkinDate || !checkoutDate) return base
   const occupied = new Set(
     (bookings ?? [])
-      .filter(b => b.status !== 'cancelled' && b.checkin_date < checkoutDate && b.checkout_date > checkinDate)
+      .filter(b => b.status !== 'cancelled' && b.status !== 'checked_out' && b.checkin_date < checkoutDate && b.checkout_date > checkinDate)
       .map(b => b.room_id)
   )
   return base.filter(r => !occupied.has(r.id))

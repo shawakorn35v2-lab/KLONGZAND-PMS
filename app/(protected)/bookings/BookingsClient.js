@@ -47,6 +47,7 @@ function getConflictingBooking(bookings, roomId, checkin, checkout, excludeBooki
     b.id !== excludeBookingId &&
     b.room_id === roomId &&
     b.status !== 'cancelled' &&
+    b.status !== 'checked_out' &&
     b.checkin_date < checkout &&
     b.checkout_date > checkin
   ) ?? null
@@ -125,7 +126,7 @@ export default function BookingsClient({ bookings, rooms, today, role, adminName
     const set = new Set()
     const map = new Map()
     bookings.forEach(b => {
-      if (b.status === 'cancelled') return
+      if (b.status === 'cancelled' || b.status === 'checked_out') return
       days.forEach(d => {
         const isOccupied = b.stay_type === 'temporary'
           ? b.checkin_date === d
@@ -163,6 +164,7 @@ export default function BookingsClient({ bookings, rooms, today, role, adminName
       const conflicts = bookings.filter(b =>
         b.room_id === room.id &&
         b.status !== 'cancelled' &&
+        b.status !== 'checked_out' &&
         b.checkin_date < searchTo &&
         b.checkout_date > searchFrom
       )

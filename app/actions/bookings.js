@@ -23,6 +23,7 @@ export async function createBooking({ roomId, customerId, newCustomer, channel, 
       .eq('room_id', roomId)
       .eq('stay_type', 'overnight')
       .neq('status', 'cancelled')
+      .neq('status', 'checked_out')
       .lte('checkin_date', checkinDate)
       .gt('checkout_date', checkinDate)
 
@@ -37,6 +38,7 @@ export async function createBooking({ roomId, customerId, newCustomer, channel, 
       .eq('checkin_date', checkinDate)
       .eq('stay_type', 'temporary')
       .neq('status', 'cancelled')
+      .neq('status', 'checked_out')
 
     const hasTimeConflict = (tempConflicts ?? []).some(c =>
       checkinTime < c.checkout_time && c.checkin_time < checkoutTime
@@ -126,6 +128,7 @@ export async function createMultiBookings({ rooms, customerId, newCustomer, chan
     .select('room_id, stay_type, checkin_date, checkout_date, checkin_time, checkout_time, rooms(room_no)')
     .in('room_id', roomIds)
     .neq('status', 'cancelled')
+    .neq('status', 'checked_out')
     .lt('checkin_date', effectiveCheckout)
     .gt('checkout_date', checkinDate)
 

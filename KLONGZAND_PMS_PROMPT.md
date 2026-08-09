@@ -69,6 +69,7 @@
 - **Admin/Staff แก้ราคา/มัดจำ/โยกห้อง**: `adminUpdateBooking` (`app/actions/bookings.js`) อนุญาต role 'admin' และ 'staff' — อัปเดต transaction amounts อัตโนมัติ (ค่ามัดจำ = deposit ใหม่, ค่าห้อง = price - deposit ใหม่) — ป้องกัน A2-style desync; staff เห็นปุ่ม ✏ แก้ไข แต่ไม่เห็นปุ่ม 🗑 ลบ
 - **Admin ลบการจอง**: ลบ transactions ทั้งหมดที่ผูกกับ booking ก่อนลบ booking
 - **checkin_time/checkout_time**: ฟิลด์ type `time` ใน DB — ต้องส่งเป็น `null` (ไม่ใช่ `""`) สำหรับ stay_type='overnight'; `openEdit` ใน BookingsClient.js initialize ด้วย `?? null`; server action ใช้ `stay_type === 'temporary' ? (value || null) : null` เป็น guard
+- **ห้องว่างหลังเช็คเอาท์ก่อนกำหนด**: ทุกจุดที่เช็ค conflict/ห้องว่าง (ปฏิทินสีห้องใน BookingsClient.js, `getConflictingBooking`, ค้นหาห้องว่าง, dropdown เลือกห้องใน BookingForm.js `getAvailableRooms`, และ server-side conflict check ใน `createBooking`/`createMultiBookings` ที่ `app/actions/bookings.js`) ต้องกรอง booking ที่ status เป็น `checked_out` ออกด้วย ไม่ใช่แค่ `cancelled` — มิฉะนั้นห้องที่ลูกค้าเช็คเอาท์แล้วก่อนกำหนดจะยังถูกมองว่าไม่ว่างจนถึงวัน checkout เดิม (แก้ 2026-08-09). หน้า dashboard/occupancy chart ที่นับสถิติย้อนหลังยังคงนับ `checked_out` เป็นวันที่มีผู้เข้าพักตามปกติ — ไม่ต้องแก้จุดนั้น
 
 ### `/customers` (ลูกค้า + ประวัติ)
 - รายชื่อลูกค้าทั้งหมด ค้นหาได้ด้วยชื่อ/เบอร์โทร
