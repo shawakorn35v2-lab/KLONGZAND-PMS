@@ -103,8 +103,9 @@ export default function BookingsClient({ bookings, rooms, today, role, adminName
   const [docFiles, setDocFiles] = useState({ idCard: null })
   const [docPreviews, setDocPreviews] = useState({ idCard: null })
 
-  // Cell popup (click red cell to view bookings)
+  // Cell popup (click red/blue cell to view bookings)
   const [cellPopup, setCellPopup] = useState(null)
+  const [cellDetailBooking, setCellDetailBooking] = useState(null)
 
   // Print preview state
   const [printBookings, setPrintBookings] = useState(null)
@@ -122,8 +123,7 @@ export default function BookingsClient({ bookings, rooms, today, role, adminName
   // Availability grid
   const days = useMemo(() => makeGridDays(today, gridOffset), [today, gridOffset])
 
-  const { occupiedSet, occupiedMap } = useMemo(() => {
-    const set = new Set()
+  const occupiedMap = useMemo(() => {
     const map = new Map()
     bookings.forEach(b => {
       if (b.status === 'cancelled' || b.status === 'checked_out') return
@@ -133,13 +133,12 @@ export default function BookingsClient({ bookings, rooms, today, role, adminName
           : b.checkin_date <= d && b.checkout_date > d
         if (isOccupied) {
           const key = `${b.room_id}__${d}`
-          set.add(key)
           if (!map.has(key)) map.set(key, [])
           map.get(key).push(b)
         }
       })
     })
-    return { occupiedSet: set, occupiedMap: map }
+    return map
   }, [bookings, days])
 
   function applyBookingFilter() {
@@ -423,27 +422,66 @@ export default function BookingsClient({ bookings, rooms, today, role, adminName
                 <tr key={room.id}>
                   <td className="px-2 py-1.5 font-semibold text-gray-700">{room.room_no}</td>
                   {days.map(d => {
-                    const occ = occupiedSet.has(`${room.id}__${d}`)
+                    const cellBookings = occupiedMap.get(`${room.id}__${d}`) ?? []
                     const isToday = d === today
+                    const overnight = cellBookings.filter(b => b.stay_type !== 'temporary')
+                    const temp = cellBookings.filter(b => b.stay_type === 'temporary')
+                    const oCount = overnight.length
+                    const tCount = temp.length
+                    const openCell = () => {
+                      setCellDetailBooking(null)
+                      setCellPopup({ bookings: cellBookings, roomNo: room.room_no, date: d })
+                    }
                     return (
                       <td key={d} className={`px-1 py-1.5 text-center ${isToday ? 'bg-blue-50' : ''}`}>
-                        {occ ? (
-                          <button
-                            type="button"
-                            onClick={() => setCellPopup({
-                              bookings: occupiedMap.get(`${room.id}__${d}`) ?? [],
-                              roomNo: room.room_no,
-                              date: d,
-                            })}
-                            title="คลิกดูรายละเอียดการจอง"
-                            className="inline-block w-full rounded text-center py-0.5 bg-red-200 text-red-700 hover:bg-red-300 cursor-pointer transition-colors"
-                          >
-                            ●
-                          </button>
-                        ) : (
+                        {cellBookings.length === 0 ? (
                           <span className="inline-block w-full rounded text-center py-0.5 bg-green-100 text-green-700">
                             ○
                           </span>
+                        ) : oCount > 0 && tCount > 0 ? (
+                          <button
+                            type="button"
+                            onClick={openCell}
+                            title="คลิกดูรายละเอียดการจอง"
+                            className="flex w-full h-6 rounded overflow-hidden cursor-pointer"
+                          >
+                            <span className="relative flex-1 bg-red-200 hover:bg-red-300 flex items-center justify-center transition-colors">
+                              <span className="w-2 h-2 rounded-full bg-red-500" />
+                              {oCount > 1 && (
+                                <span className="absolute top-0 right-0 z-10 text-[9px] font-bold bg-white text-red-600 rounded-bl px-1 leading-tight">×{oCount}</span>
+                              )}
+                            </span>
+                            <span className="relative flex-1 bg-blue-200 hover:bg-blue-300 flex items-center justify-center transition-colors">
+                              <span className="w-2 h-2 rounded-full bg-blue-500" />
+                              {tCount > 1 && (
+                                <span className="absolute top-0 right-0 z-10 text-[9px] font-bold bg-white text-blue-600 rounded-bl px-1 leading-tight">×{tCount}</span>
+                              )}
+                            </span>
+                          </button>
+                        ) : oCount > 0 ? (
+                          <button
+                            type="button"
+                            onClick={openCell}
+                            title="คลิกดูรายละเอียดการจอง"
+                            className="relative flex w-full h-6 rounded overflow-hidden items-center justify-center bg-red-200 hover:bg-red-300 cursor-pointer transition-colors"
+                          >
+                            <span className="w-2 h-2 rounded-full bg-red-500" />
+                            {oCount > 1 && (
+                              <span className="absolute top-0 right-0 z-10 text-[9px] font-bold bg-white text-red-600 rounded-bl px-1 leading-tight">×{oCount}</span>
+                            )}
+                          </button>
+                        ) : (
+                          <button
+                            type="button"
+                            onClick={openCell}
+                            title="คลิกดูรายละเอียดการจอง"
+                            className="relative flex w-full h-6 rounded overflow-hidden items-center justify-center bg-blue-200 hover:bg-blue-300 cursor-pointer transition-colors"
+                          >
+                            <span className="w-2 h-2 rounded-full bg-blue-500" />
+                            {tCount > 1 && (
+                              <span className="absolute top-0 right-0 z-10 text-[9px] font-bold bg-white text-blue-600 rounded-bl px-1 leading-tight">×{tCount}</span>
+                            )}
+                          </button>
                         )}
                       </td>
                     )
@@ -452,7 +490,12 @@ export default function BookingsClient({ bookings, rooms, today, role, adminName
               ))}
             </tbody>
           </table>
-          <p className="text-xs text-gray-400 mt-2">● มีการจอง  ○ ว่าง</p>
+          <div className="flex flex-wrap gap-3 mt-2 text-xs text-gray-500">
+            <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-red-500 inline-block" /> ค้างคืน</span>
+            <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-blue-500 inline-block" /> ชั่วคราว</span>
+            <span>×N มีหลายรายการซ้อน</span>
+            <span>○ ว่าง</span>
+          </div>
         </div>
       </div>
 
@@ -764,86 +807,128 @@ export default function BookingsClient({ bookings, rooms, today, role, adminName
         </div>
       )}
 
-      {/* Cell popup — click red cell to view bookings */}
-      {cellPopup && (
-        <div
-          className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4"
-          onClick={() => setCellPopup(null)}
-        >
+      {/* Cell popup — click a grid cell to view bookings */}
+      {cellPopup && (() => {
+        const showList = cellPopup.bookings.length > 1 && !cellDetailBooking
+        const closePopup = () => { setCellPopup(null); setCellDetailBooking(null) }
+        return (
           <div
-            className="bg-white rounded-2xl shadow-2xl max-w-md w-full p-6 max-h-[85vh] overflow-y-auto"
-            onClick={e => e.stopPropagation()}
+            className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4"
+            onClick={closePopup}
           >
-            <div className="flex items-center justify-between mb-4">
-              <h3 className="text-lg font-semibold text-gray-900">
-                การจอง — ห้อง {cellPopup.roomNo} ({formatDate(cellPopup.date)})
-              </h3>
-              <button
-                onClick={() => setCellPopup(null)}
-                className="text-gray-400 hover:text-gray-600 text-xl leading-none"
-              >
-                ✕
-              </button>
-            </div>
-            <div className="space-y-3">
-              {cellPopup.bookings.map(b => (
-                <div key={b.id} className="border border-gray-200 rounded-lg p-3 space-y-1.5 text-sm">
-                  <div className="flex items-center justify-between">
-                    <div className="font-semibold text-gray-900">{b.customer?.full_name ?? '-'}</div>
-                    <BookingStatusBadge status={b.status} />
-                  </div>
-                  {b.customer?.phone && (
-                    <div className="text-gray-500 text-xs">📞 {b.customer.phone}</div>
-                  )}
-                  <div className="grid grid-cols-2 gap-x-2 gap-y-1 text-xs text-gray-600 pt-1">
-                    <div>
-                      เช็คอิน: <span className="text-gray-900">
-                        {formatDate(b.checkin_date)}
-                        {b.checkin_time ? ` ${b.checkin_time.slice(0, 5)}` : ''}
-                      </span>
-                    </div>
-                    <div>
-                      เช็คเอาท์: <span className="text-gray-900">
-                        {formatDate(b.checkout_date)}
-                        {b.checkout_time ? ` ${b.checkout_time.slice(0, 5)}` : ''}
-                      </span>
-                    </div>
-                    <div>ราคา: <span className="text-gray-900">{formatCurrency(b.price)}</span></div>
-                    <div>มัดจำ: <span className="text-gray-900">{formatCurrency(b.deposit)}</span></div>
-                    <div className="col-span-2 flex items-center gap-2">
-                      <span>ช่องทาง:</span>
-                      <ChannelBadge channel={b.channel} />
-                      {b.stay_type === 'temporary' && (
-                        <span className="text-xs bg-orange-100 text-orange-700 px-1.5 py-0.5 rounded font-medium">ชั่วคราว</span>
-                      )}
-                    </div>
-                    {b.note && (
-                      <div className="col-span-2 text-gray-500">📝 {b.note}</div>
-                    )}
-                  </div>
-                  <div className="pt-2 flex gap-2">
-                    {canEdit && (
-                      <button
-                        onClick={() => { setCellPopup(null); openEdit(b) }}
-                        className="flex-1 px-3 py-1.5 text-xs bg-amber-500 text-white rounded hover:bg-amber-600"
-                      >
-                        ✏ แก้ไขการจองนี้
-                      </button>
-                    )}
+            <div
+              className="bg-white rounded-2xl shadow-2xl max-w-md w-full p-6 max-h-[85vh] overflow-y-auto"
+              onClick={e => e.stopPropagation()}
+            >
+              <div className="flex items-center gap-2 justify-between mb-4">
+                <h3 className="text-lg font-semibold text-gray-900 flex items-center gap-2">
+                  {!showList && cellPopup.bookings.length > 1 && (
                     <button
-                      onClick={() => { setCellPopup(null); handlePrint(b.id) }}
-                      disabled={printLoading === b.id}
-                      className="flex-1 px-3 py-1.5 text-xs bg-teal-600 text-white rounded hover:bg-teal-700 disabled:opacity-50"
+                      onClick={() => setCellDetailBooking(null)}
+                      className="text-gray-400 hover:text-gray-600 text-base leading-none"
+                      title="กลับไปดูรายการทั้งหมด"
                     >
-                      {printLoading === b.id ? '...' : '🖨 ปริ้น'}
+                      ←
                     </button>
-                  </div>
+                  )}
+                  การจอง — ห้อง {cellPopup.roomNo} ({formatDate(cellPopup.date)})
+                </h3>
+                <button
+                  onClick={closePopup}
+                  className="text-gray-400 hover:text-gray-600 text-xl leading-none"
+                >
+                  ✕
+                </button>
+              </div>
+
+              {showList ? (
+                <div className="space-y-2">
+                  {cellPopup.bookings.map(b => (
+                    <div
+                      key={b.id}
+                      onClick={() => setCellDetailBooking(b)}
+                      className="flex items-center justify-between p-2.5 rounded-lg border border-gray-200 cursor-pointer hover:bg-gray-50"
+                    >
+                      <div>
+                        <p className="text-sm font-medium text-gray-900">{b.customer?.full_name ?? '-'}</p>
+                        <p className="text-xs text-gray-500">
+                          {b.checkin_time ? b.checkin_time.slice(0, 5) : formatShortDate(b.checkin_date)}
+                          {' – '}
+                          {b.checkout_time ? b.checkout_time.slice(0, 5) : formatShortDate(b.checkout_date)}
+                        </p>
+                      </div>
+                      <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${
+                        b.stay_type === 'temporary' ? 'bg-blue-100 text-blue-700' : 'bg-red-100 text-red-700'
+                      }`}>
+                        {b.stay_type === 'temporary' ? 'ชั่วคราว' : 'ค้างคืน'}
+                      </span>
+                    </div>
+                  ))}
                 </div>
-              ))}
+              ) : (
+                <div className="space-y-3">
+                  {[cellDetailBooking ?? cellPopup.bookings[0]].map(b => (
+                    <div key={b.id} className="border border-gray-200 rounded-lg p-3 space-y-1.5 text-sm">
+                      <div className="flex items-center justify-between">
+                        <div className="font-semibold text-gray-900">{b.customer?.full_name ?? '-'}</div>
+                        <BookingStatusBadge status={b.status} />
+                      </div>
+                      {b.customer?.phone && (
+                        <div className="text-gray-500 text-xs">📞 {b.customer.phone}</div>
+                      )}
+                      <div className="grid grid-cols-2 gap-x-2 gap-y-1 text-xs text-gray-600 pt-1">
+                        <div>
+                          เช็คอิน: <span className="text-gray-900">
+                            {formatDate(b.checkin_date)}
+                            {b.checkin_time ? ` ${b.checkin_time.slice(0, 5)}` : ''}
+                          </span>
+                        </div>
+                        <div>
+                          เช็คเอาท์: <span className="text-gray-900">
+                            {formatDate(b.checkout_date)}
+                            {b.checkout_time ? ` ${b.checkout_time.slice(0, 5)}` : ''}
+                          </span>
+                        </div>
+                        <div>ราคา: <span className="text-gray-900">{formatCurrency(b.price)}</span></div>
+                        <div>มัดจำ: <span className="text-gray-900">{formatCurrency(b.deposit)}</span></div>
+                        <div className="col-span-2 flex items-center gap-2">
+                          <span>ช่องทาง:</span>
+                          <ChannelBadge channel={b.channel} />
+                          <span className={`text-xs px-1.5 py-0.5 rounded font-medium ${
+                            b.stay_type === 'temporary' ? 'bg-blue-100 text-blue-700' : 'bg-red-100 text-red-700'
+                          }`}>
+                            {b.stay_type === 'temporary' ? 'ชั่วคราว' : 'ค้างคืน'}
+                          </span>
+                        </div>
+                        {b.note && (
+                          <div className="col-span-2 text-gray-500">📝 {b.note}</div>
+                        )}
+                      </div>
+                      <div className="pt-2 flex gap-2">
+                        {canEdit && (
+                          <button
+                            onClick={() => { closePopup(); openEdit(b) }}
+                            className="flex-1 px-3 py-1.5 text-xs bg-amber-500 text-white rounded hover:bg-amber-600"
+                          >
+                            ✏ แก้ไขการจองนี้
+                          </button>
+                        )}
+                        <button
+                          onClick={() => { closePopup(); handlePrint(b.id) }}
+                          disabled={printLoading === b.id}
+                          className="flex-1 px-3 py-1.5 text-xs bg-teal-600 text-white rounded hover:bg-teal-700 disabled:opacity-50"
+                        >
+                          {printLoading === b.id ? '...' : '🖨 ปริ้น'}
+                        </button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
             </div>
           </div>
-        </div>
-      )}
+        )
+      })()}
 
       {/* Print preview modal */}
       {printBookings && (
