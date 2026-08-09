@@ -119,9 +119,11 @@ export default function TransactionsClient({
     router.refresh()
   }
 
+  const knownCategoryNames = new Set(categories.map(c => c.name))
   const filtered = transactions.filter(t => {
     const inType = (t.tx_type === 'income' && typeFilter.income) || (t.tx_type === 'expense' && typeFilter.expense)
-    const inCategory = !t.category || categoryFilter.has(t.category)
+    // category ที่ไม่ตรงกับหมวดหมู่ที่รู้จัก (เช่น พิมพ์เองอิสระในอดีต) ต้องผ่านเสมอ ไม่ให้ checkbox กรองหาย
+    const inCategory = !knownCategoryNames.has(t.category) || categoryFilter.has(t.category)
     return inType && inCategory
   })
 
