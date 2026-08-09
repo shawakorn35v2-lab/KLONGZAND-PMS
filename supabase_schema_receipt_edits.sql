@@ -27,3 +27,4 @@ create policy "receipt_edits_insert" on receipt_edits for insert
 
 -- ตรวจผล
 select 'receipt_edits' as table_name, count(*) as rows from receipt_edits;
+/c

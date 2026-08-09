@@ -1,0 +1,121 @@
+ขอแก้ไขการแสดงผลช่องห้องในกริดปฏิทิน (หน้าจองห้องพัก) ให้แสดงสีตามประเภทการจอง พร้อม badge จำนวน และยังคลิกดูรายละเอียดได้เหมือนเดิม
+
+───────────────────────────
+1. ตารางแสดงผลช่อง (room × date)
+───────────────────────────
+
+| กรณี | แสดงผล |
+|---|---|
+| ว่าง | สีเขียว/ขาว (เหมือนเดิม) |
+| ค้างคืน 1 | ชมพูเต็มช่อง + จุดแดงตรงกลาง |
+| ค้างคืน 2+ | ชมพูเต็มช่อง + จุดแดง + badge "×N" มุมขวาบน |
+| ชั่วคราว 1 | ฟ้าอ่อนเต็มช่อง + จุดฟ้าตรงกลาง |
+| ชั่วคราว 2+ | ฟ้าอ่อนเต็มช่อง + จุดฟ้า + badge "×N" มุมขวาบน |
+| ค้างคืน + ชั่วคราว | ซ้ายครึ่งชมพู / ขวาครึ่งฟ้า (badge ×N ถ้า >1 แต่ละฝั่ง) |
+
+สีที่ใช้:
+- ค้างคืน: bg-red-200 / จุด bg-red-500
+- ชั่วคราว: bg-blue-200 / จุด bg-blue-500
+- badge: ตัวอักษรเล็ก มุมขวาบน พื้นขาว ตัวอักษรสีเข้มตามประเภท
+
+───────────────────────────
+2. วิธีแยกประเภท
+───────────────────────────
+
+ให้ตรวจ schema จริงของตาราง bookings ว่า field ใดบอกว่าเป็น "ชั่วคราว":
+- อาจเป็น booking_type, channel, หรือ tag
+- ถ้าไม่มี field นั้น ให้ใช้: check_in และ check_out เป็นวันเดียวกัน = ชั่วคราว
+
+ห้องที่ status = 'checked_out' หรือ 'cancelled' → ไม่นับ
+
+───────────────────────────
+3. JSX ตัวอย่าง
+───────────────────────────
+
+```jsx
+const overnight = bookingsInCell.filter(b => b.booking_type !== 'ชั่วคราว')
+const temp      = bookingsInCell.filter(b => b.booking_type === 'ชั่วคราว')
+const oCount    = overnight.length
+const tCount    = temp.length
+
+const Badge = ({ count, color }) => count > 1 ? (
+  <span className={`absolute top-0 right-0 text-[9px] font-bold bg-white ${color} rounded-bl px-1 leading-tight z-10`}>
+    ×{count}
+  </span>
+) : null
+
+// ช่องทั้งหมดต้อง position: relative เพื่อรองรับ badge absolute
+// และต้อง onClick เปิด popup เหมือนเดิม (ดูข้อ 4)
+
+{oCount > 0 && tCount > 0 ? (
+  <div className="relative flex rounded-lg overflow-hidden w-full h-full cursor-pointer" onClick={...}>
+    <div className="flex-1 bg-red-200 flex items-center justify-center relative">
+      <span className="w-2 h-2 rounded-full bg-red-500" />
+      <Badge count={oCount} color="text-red-600" />
+    </div>
+    <div className="flex-1 bg-blue-200 flex items-center justify-center relative">
+      <span className="w-2 h-2 rounded-full bg-blue-500" />
+      <Badge count={tCount} color="text-blue-600" />
+    </div>
+  </div>
+) : oCount > 0 ? (
+  <div className="relative bg-red-200 rounded-lg w-full h-full flex items-center justify-center cursor-pointer" onClick={...}>
+    <span className="w-2 h-2 rounded-full bg-red-500" />
+    <Badge count={oCount} color="text-red-600" />
+  </div>
+) : tCount > 0 ? (
+  <div className="relative bg-blue-200 rounded-lg w-full h-full flex items-center justify-center cursor-pointer" onClick={...}>
+    <span className="w-2 h-2 rounded-full bg-blue-500" />
+    <Badge count={tCount} color="text-blue-600" />
+  </div>
+) : (
+  <div className="bg-green-100 rounded-lg w-full h-full" />
+)}
+```
+
+───────────────────────────
+4. การคลิกเพื่อดูรายละเอียด (สำคัญ)
+───────────────────────────
+
+ให้คงฟังก์ชัน onClick เดิมไว้ทุก case โดย:
+
+- ถ้ามีการจอง 1 รายการในช่อง → เปิด popup รายละเอียดเหมือนเดิม
+- ถ้ามีการจองหลายรายการในช่อง (2+ booking) → เปิด popup แสดง LIST ของการจองทั้งหมดในช่องนั้น
+  โดยแต่ละรายการใน list มี:
+  - ชื่อลูกค้า
+  - เวลาเช็คอิน – เช็คเอาท์
+  - ประเภท (ค้างคืน / ชั่วคราว) แสดงเป็น badge สี
+  - คลิกรายการนั้นเพื่อเปิด popup รายละเอียดเต็มของ booking นั้น
+
+ตัวอย่าง popup list (ถ้ามีหลายรายการ):
+```jsx
+<div className="p-3 space-y-2">
+  <p className="text-sm font-medium text-gray-500">ห้อง A1 — 9 ส.ค.</p>
+  {bookingsInCell.map(b => (
+    <div key={b.id}
+         className="flex items-center justify-between p-2 rounded border cursor-pointer hover:bg-gray-50"
+         onClick={() => openBookingDetail(b)}>
+      <div>
+        <p className="text-sm font-medium">{b.customers?.full_name}</p>
+        <p className="text-xs text-gray-500">{formatTime(b.check_in)} – {formatTime(b.check_out)}</p>
+      </div>
+      <span className={`text-xs px-2 py-0.5 rounded-full ${
+        b.booking_type === 'ชั่วคราว'
+          ? 'bg-blue-100 text-blue-700'
+          : 'bg-red-100 text-red-700'
+      }`}>
+        {b.booking_type === 'ชั่วคราว' ? 'ชั่วคราว' : 'ค้างคืน'}
+      </span>
+    </div>
+  ))}
+</div>
+```
+
+───────────────────────────
+หมายเหตุ
+───────────────────────────
+- ห้องที่ status = 'checked_out' หรือ 'cancelled' → ไม่นับในช่อง
+- ถ้า cell เดิมมี onClick อยู่แล้ว → ให้แก้ให้รองรับ multi-booking ตามข้อ 4
+- ทุก div ที่มี badge ต้องมี position: relative
+
+ทำเสร็จแล้ว build ทดสอบ commit push แล้วอัปเดต KLONGZAND_PMS_PROMPT.md ด้วย

@@ -1,0 +1,18 @@
+ขอเอาฟีเจอร์ "ปิดยอด" ออกจากระบบทั้งหมด เพราะตัดสินใจไม่ใช้แล้ว ให้ทำตามนี้:
+
+1. ไฟล์ app/actions/transactions.js:
+   - ลบฟังก์ชัน closeDailyTransactions ออกทั้งก้อน
+   - ลบ block ที่เช็ค daily_closings ออกจากฟังก์ชัน createTransaction (ส่วนที่ query from('daily_closings') แล้ว return error 'วันที่นี้ถูกปิดยอดแล้ว') ให้เพิ่มรายการได้ตลอดโดยไม่มีการบล็อก
+   - ลบ block ที่เช็ค is_closed ออกจากฟังก์ชัน deleteTransaction (ส่วนที่ select('is_closed') แล้ว return error 'ไม่สามารถลบรายการที่ปิดยอดแล้ว') ให้ลบได้ตามสิทธิ์ role ตามปกติ
+
+2. ไฟล์ app/(protected)/transactions/TransactionsClient.js:
+   - ลบปุ่ม "ปิดยอดแล้ว" / "ปิดยอด" ออกจาก UI ทั้งหมด
+   - ลบ logic การเรียก closeDailyTransactions ออก
+   - ลบการแสดงสีส้มและ logic พิเศษสำหรับ transaction ที่ is_closed = true ออก (ทุก row ให้แสดงปุ่มลบสีแดงปกติเหมือนกันหมด ไม่ต้องเช็ค is_closed อีกต่อไป)
+   - ลบ import หรือ reference ที่ไม่ได้ใช้แล้วออกด้วย
+
+3. ไฟล์ app/(protected)/bookings/BookingsClient.js:
+   - ลบทุกส่วนที่เช็ค is_closed ของ transactions ออก (มีประมาณ 3 จุด เช่น hasClosedTx และ UI ที่แสดงเตือนเกี่ยวกับ is_closed) เพราะไม่มีการปิดยอดอีกแล้ว
+
+4. ไฟล์ app/actions/bookings.js:
+   - หาบรรทัดท�

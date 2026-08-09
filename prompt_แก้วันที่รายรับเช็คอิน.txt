@@ -1,0 +1,36 @@
+ขอแก้บั๊ก: เมื่อกดเช็คอินลูกค้าที่เข้าพักช่วงเที่ยงคืน รายรับบันทึกเป็นวันก่อนหน้าแทนที่จะเป็นวันที่ลูกค้าเช็คอินจริง
+
+**สาเหตุ:**
+ใน app/actions/bookings.js ฟังก์ชัน checkinBooking() ตอน insert transaction ใช้:
+  tx_date: getTodayString()
+ซึ่งบันทึกวันที่ "ตอนที่กดปุ่ม" ไม่ใช่วันที่เช็คอินของการจอง
+
+**วิธีแก้ — app/actions/bookings.js ฟังก์ชัน checkinBooking():**
+
+ตอนที่ query ข้อมูล booking มาแล้ว ให้ดึง check_in date มาใช้เป็น tx_date แทน getTodayString() โดย:
+
+1. ตรวจสอบว่า query booking มี field check_in (หรือ check_in_date) อยู่แล้ว ถ้ายังไม่มีให้เพิ่มใน select
+
+2. แปลง check_in เป็น date string format YYYY-MM-DD (Bangkok timezone) เช่น:
+   ```javascript
+   const checkInDate = booking.check_in
+     ? new Date(booking.check_in).toLocaleDateString('en-CA', { timeZone: 'Asia/Bangkok' })
+     : getTodayString()
+   ```
+   (en-CA ให้ format YYYY-MM-DD ตรงๆ)
+
+3. เปลี่ยน insert transaction จาก:
+   ```javascript
+   tx_date: getTodayString(),
+   ```
+   เป็น:
+   ```javascript
+   tx_date: checkInDate,
+   ```
+
+**ผลลัพธ์ที่ต้องการ:**
+- ลูกค้าจอง check_in 09/07/2569 00:00 → รายรับบันทึกวันที่ 09/07/2569
+- ลูกค้าจอง check_in 08/07/2569 14:00 → รายรับบันทึกวันที่ 08/07/2569
+- ไม่ขึ้นกับวันที่ "ตอนที่พนักงานกดเช็คอิน" อีกต่อไป
+
+ทำเสร็จแล้ว build ทดสอบ commit push แล้วอัปเดต KLONGZAND_PMS_PROMPT.md ด้วย

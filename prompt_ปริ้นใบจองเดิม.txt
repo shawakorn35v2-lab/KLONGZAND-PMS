@@ -1,0 +1,41 @@
+ขอเพิ่มปุ่ม "🖨 ปริ้น" สำหรับพิมพ์ใบยืนยันการจองในหน้า Bookings โดยมี BookingPrintPreview component อยู่แล้ว และมี server action getBookingsByIds() อยู่แล้วใน app/actions/bookings.js
+
+ให้แก้ไขไฟล์ app/(protected)/bookings/BookingsClient.js ดังนี้:
+
+1. เพิ่ม state สำหรับเก็บข้อมูลที่จะปริ้น:
+   const [printBookings, setPrintBookings] = useState(null)
+   const [printLoading, setPrintLoading] = useState(null)  // เก็บ id ที่กำลังโหลด
+
+2. เพิ่ม import getBookingsByIds ถ้ายังไม่มี
+
+3. สร้างฟังก์ชัน handlePrint:
+   async function handlePrint(bookingId) {
+     setPrintLoading(bookingId)
+     try {
+       const result = await getBookingsByIds([bookingId])
+       if (result?.data?.length) setPrintBookings(result.data)
+     } finally {
+       setPrintLoading(null)
+     }
+   }
+
+4. เพิ่มปุ่ม "🖨 ปริ้น" ในแถว action ของตารางรายการจอง (ต่อจากปุ่มอื่นๆ เช่น แก้ไข/ลบ) สำหรับทุก booking ไม่ว่าสถานะใด:
+   <button
+     onClick={() => handlePrint(b.id)}
+     disabled={printLoading === b.id}
+     className="px-2.5 py-1 text-xs bg-teal-600 text-white rounded hover:bg-teal-700 disabled:opacity-50"
+   >
+     {printLoading === b.id ? '...' : '🖨 ปริ้น'}
+   </button>
+
+5. เพิ่มปุ่มเดียวกันใน cell popup (ส่วน cellPopup.bookings.map) ด้วย เพื่อให้คลิกช่องแดงแล้วปริ้นได้เลย
+
+6. เพิ่ม BookingPrintPreview ที่ render เมื่อ printBookings มีค่า (วางต่อจาก modal อื่นๆ):
+   {printBookings && (
+     <BookingPrintPreview
+       bookings={printBookings}
+       onClose={() => setPrintBookings(null)}
+     />
+   )}
+
+ทำเสร็จแล้ว build ทดสอบ commit push แล้วอัปเดต KLONGZAND_PMS_PROMPT.md ด้วย

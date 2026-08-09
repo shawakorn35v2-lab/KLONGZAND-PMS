@@ -1,0 +1,41 @@
+ขอเพิ่มช่องกรอก "วันที่" ในใบเสร็จรับเงิน เพื่อให้ผู้ใช้เลือกวันที่เองได้แทนที่จะใช้วันที่สร้างอัตโนมัติ โดยตาราง receipts มีคอลัมน์ receipt_date (type: date) พร้อมแล้ว
+
+ให้แก้ไขตามนี้:
+
+**1. components/ReceiptForm.js**
+- เพิ่ม state: `const [receiptDate, setReceiptDate] = useState(initialReceipt?.receipt_date ?? getTodayString())`
+  โดย getTodayString() คือวันที่วันนี้ format YYYY-MM-DD (ใช้ Bangkok timezone เหมือนที่ใช้ใน actions/receipts.js)
+- เพิ่มช่องกรอกวันที่ในฟอร์ม (วางใกล้ๆ กับข้อมูลลูกค้า):
+  ```jsx
+  <div>
+    <label className="block text-sm font-medium text-gray-700 mb-1">วันที่ / Date</label>
+    <input
+      type="date"
+      value={receiptDate}
+      onChange={e => setReceiptDate(e.target.value)}
+      className="input-field w-full"
+      required
+    />
+  </div>
+  ```
+- เพิ่ม receipt_date ใน payload ที่ส่งไป createReceipt/updateReceipt:
+  `receipt_date: receiptDate`
+
+**2. app/actions/receipts.js**
+- ฟังก์ชัน createReceipt: รับ receipt_date จาก payload แล้วใส่ตอน insert:
+  `receipt_date: receipt_date ?? bangkokDateStr()`
+- ฟังก์ชัน updateReceipt: รับ receipt_date แล้วใส่ตอน update เช่นกัน
+
+**3. components/ReceiptPreview.js**
+- ตรงที่แสดง "วันที่ / Date" ในใบเสร็จ ให้ใช้ `receipt.receipt_date` แทน `receipt.created_at`
+- format วันที่เป็นภาษาไทย เช่น:
+  ```javascript
+  new Date(receipt.receipt_date).toLocaleDateString('th-TH', {
+    year: 'numeric', month: 'long', day: 'numeric', timeZone: 'Asia/Bangkok'
+  })
+  ```
+
+**4. app/(protected)/receipts/ReceiptsClient.js (หน้าลิสต์)**
+- คอลัมน์ "วันที่" ให้แสดง `receipt_date` แทน `created_at`
+
+ทำเสร็จแล้ว build ทดสอบ commit push แล้วอัปเดต KLONGZAND_PMS_PROMPT.md ด้วย

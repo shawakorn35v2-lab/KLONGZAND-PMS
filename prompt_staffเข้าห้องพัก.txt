@@ -1,0 +1,11 @@
+ขอแก้ไขไฟล์ components/Sidebar.js เพียงจุดเดียว:
+
+หาบรรทัดที่มี:
+  { href: '/rooms', label: 'ห้องพัก', icon: '🏠', adminOnly: true }
+
+เปลี่ยนเป็น:
+  { href: '/rooms', label: 'ห้องพัก', icon: '🏠', adminOnly: false }
+
+เปลี่ยนแค่ค่า adminOnly จาก true เป็น false เท่านั้น ไม่ต้องแก้อะไรเพิ่ม
+
+ทำเสร็จแล้ว build ทดสอบ commit แล้วอัปเดต KLONGZAND_PMS_PROMPT.md ให้สะท้อนการแก้ไขนี้ด้วย

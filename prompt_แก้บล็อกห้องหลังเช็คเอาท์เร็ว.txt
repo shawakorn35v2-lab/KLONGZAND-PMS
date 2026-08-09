@@ -1,0 +1,53 @@
+ขอแก้บั๊ก: ห้องที่ลูกค้าเช็คเอาท์แล้วก่อนกำหนด ระบบยังแสดงว่าห้องไม่ว่าง ทำให้จองลูกค้าคนใหม่ในวันเดิมไม่ได้
+
+**ตัวอย่างปัญหา:**
+- ลูกค้า A2 จอง 08/08/2569 (ค้างคืน เช็คเอาท์ 09/08/2569)
+- แต่ลูกค้าออกจริงเวลา 22:00 น. ของวัน 08/08/2569
+- พนักงานทำความสะอาดห้องแล้ว ต้องการจองลูกค้าใหม่ห้องเดิม
+- ระบบบล็อกไม่ให้จอง เพราะเห็นว่ายังมีการจองของ A2 อยู่ในวันนั้น
+
+**สาเหตุ:**
+Logic ตรวจสอบห้องว่างใช้แค่ date range overlap — ถ้ามีการจองอื่นที่วันที่ตรงกัน จะบล็อกทั้งหมด โดยไม่ดู status ของการจองนั้น
+
+**วิธีแก้:**
+
+**1. หาไฟล์ที่ check ห้องว่าง** — น่าจะอยู่ใน:
+- `app/actions/bookings.js` ฟังก์ชัน createBooking() หรือ checkRoomAvailability()
+- หรือ query ที่ใช้ตรวจสอบ conflict ก่อน insert
+
+**2. แก้ query ตรวจ conflict:**
+
+เดิม (ตัวอย่าง):
+```javascript
+const { data: conflicts } = await supabase
+  .from('bookings')
+  .select('id')
+  .eq('room_id', roomId)
+  .lt('check_in', checkOut)
+  .gt('check_out', checkIn)
+```
+
+แก้เป็น — เพิ่มเงื่อนไขกรอง status ออก:
+```javascript
+const { data: conflicts } = await supabase
+  .from('bookings')
+  .select('id')
+  .eq('room_id', roomId)
+  .lt('check_in', checkOut)
+  .gt('check_out', checkIn)
+  .not('status', 'in', '("checked_out","cancelled")')
+```
+
+ความหมาย: ห้องที่มีการจองอยู่ แต่ status เป็น checked_out หรือ cancelled แล้ว ให้ถือว่าว่าง
+
+**3. ตรวจสอบด้วยว่า:**
+- ฟังก์ชันที่แสดงสีห้องในกริด (calendar view) ก็ต้องใช้ logic เดียวกัน
+  → ห้องที่ status = 'checked_out' ให้แสดงสีเขียว (ว่าง) ไม่ใช่แดง (ไม่ว่าง)
+- ถ้ามีฟังก์ชัน getRoomStatus() หรือ getAvailableRooms() ให้แก้ที่นั่นด้วย
+
+**ผลลัพธ์ที่ต้องการ:**
+- ลูกค้า A2 กด "เช็คเอาท์" แล้ว → ห้อง A2 แสดงสีเขียวทันที
+- พนักงานสามารถจองลูกค้าใหม่ในห้องเดิมวันเดิมได้เลย
+- ไม่ต้องลบหรือแก้ไขการจองเดิมของ A2
+
+ทำเสร็จแล้ว build ทดสอบ commit push แล้วอัปเดต KLONGZAND_PMS_PROMPT.md ด้วย

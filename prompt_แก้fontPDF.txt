@@ -1,0 +1,56 @@
+ขอแก้ปัญหา PDF ภาษาไทยแสดงเป็น &&& ในหน้าห้องรายเดือน (MeterClient.js)
+
+ปัญหา: jsPDF ไม่รองรับฟอนต์ภาษาไทย ทำให้ตัวอักษรไทยแสดงเป็น &&& ทั้งหมด
+
+วิธีแก้ที่ถูกต้อง: เปลี่ยนจากการใช้ jsPDF วาด text โดยตรง → ใช้ html2canvas แคปหน้าตัวอย่างใบแจ้งหนี้ที่มีอยู่แล้วในหน้า แล้วแปลงเป็น PDF (วิธีนี้ภาษาไทยออกมาสมบูรณ์ 100% เพราะ browser render ให้)
+
+ให้ทำตามนี้:
+
+1. ติดตั้ง package ก่อน:
+   npm install html2canvas
+
+2. แก้ไขไฟล์ app/(protected)/rooms/[id]/meter/MeterClient.js:
+   - หา div ที่แสดง "ตัวอย่างใบแจ้งหนี้" (invoice preview) ซึ่งมี ref หรือ id อยู่แล้ว ถ้ายังไม่มีให้เพิ่ม ref ชื่อ invoiceRef
+   - แก้ฟังก์ชัน handlePrintPDF ให้ใช้ html2canvas แทน:
+
+   ```javascript
+   async function handlePrintPDF() {
+     if (!printRow) return
+     setPrinting(true)
+     try {
+       const html2canvas = (await import('html2canvas')).default
+       const { default: jsPDF } = await import('jspdf')
+
+       const element = invoiceRef.current
+       const canvas = await html2canvas(element, {
+         scale: 2,
+         useCORS: true,
+         backgroundColor: '#ffffff',
+       })
+
+       const imgData = canvas.toDataURL('image/png')
+       const pdf = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' })
+       const pageWidth = pdf.internal.pageSize.getWidth()
+       const pageHeight = pdf.internal.pageSize.getHeight()
+       const imgWidth = pageWidth
+       const imgHeight = (canvas.height * pageWidth) / canvas.width
+
+       const yOffset = imgHeight < pageHeight ? (pageHeight - imgHeight) / 2 : 0
+       pdf.addImage(imgData, 'PNG', 0, yOffset, imgWidth, Math.min(imgHeight, pageHeight))
+       pdf.save(`ใบแจ้งหนี้-ห้อง${room.room_no}-${printRow.billing_month}.pdf`)
+     } finally {
+       setPrinting(false)
+     }
+   }
+   ```
+
+   - เพิ่ม ref ให้ div ตัวอย่างใบแจ้งหนี้:
+     เพิ่มที่ต้น component: `const invoiceRef = useRef(null)`
+     เพิ่ม import: `import { useRef } from 'react'` (หรือเพิ่มใน destructure ที่มีอยู่แล้ว)
+     ใส่ `ref={invoiceRef}` ใน div ที่ครอบใบแจ้งหนี้
+
+3. เช็คว่าไม่มี import หรือ code เดิมที่ไม่ได้ใช้แล้ว (เช่น autoTable import ถ้าไม่ใช้แล้ว)
+
+4. build ทดสอบ ลองกด "ดาวน์โหลด PDF" ดูว่าภาษาไทยออกมาถูกต้อง
+
+ทำเสร็จแล้ว commit แล้วอัปเดต KLONGZAND_PMS_PROMPT.md ให้สะท้อนการแก้ไขนี้ด้วย

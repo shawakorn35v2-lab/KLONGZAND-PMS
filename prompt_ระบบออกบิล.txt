@@ -1,0 +1,79 @@
+ขอสร้างระบบออกใบเสร็จรับเงิน (ระบบบิล) สำหรับ KLONGZAND RESORT โดยมีตาราง receipts และ receipt_items ในฐานข้อมูลพร้อมแล้ว (สร้างไว้แล้ว)
+
+แบบฟอร์มใบเสร็จที่ต้องการมีลักษณะดังนี้:
+- หัวกระดาษ: โลโก้ KLONG ZAND RESORT PHALA + "ใบเสร็จรับเงิน / RECEIPT" + เลขที่/No + วันที่/Date
+- ข้อมูลลูกค้า: ชื่อลูกค้า, ที่อยู่, เบอร์โทร, เลขประจำตัวผู้เสียภาษี
+- ตารางรายการ 10 แถว: ลำดับ / รายการ (Description) / จำนวน (Quantity) / ราคาต่อหน่วย (Unit Price) / จำนวนเงิน (Amount Baht)
+- ช่องชำระโดย: เงินสด / โอนเงิน / อื่นๆ (checkbox)
+- หมายเหตุ
+- สรุปยอด: รวมเงิน / ส่วนลด / รับเงินแล้ว (highlight)
+- ลายเซ็น: ผู้รับเงิน / ผู้ชำระเงิน
+- ท้ายกระดาษ: "ขอบคุณที่ใช้บริการ / THANK YOU FOR YOUR SUPPORT"
+
+ให้สร้างระบบนี้ตามนี้:
+
+**1. app/actions/receipts.js — Server Actions**
+- getReceipts({ page, limit, search }) → select จาก receipts join receipt_items, รองรับ search ตาม receipt_no/customer_name
+- getReceipt(id) → select receipts + receipt_items สำหรับแสดงรายละเอียด
+- createReceipt({ customerName, customerAddress, customerTel, customerTaxId, paymentMethod, paymentOtherNote, remark, items, discount }) → สร้าง receipt_no อัตโนมัติรูปแบบ RC-YYYYMMDD-NNN (นับจาก DB ว่าวันนี้มีกี่ใบแล้ว), insert receipts + receipt_items, คืน receipt id
+- deleteReceipt(id) → admin only
+
+**2. app/(protected)/receipts/page.js**
+- หน้าลิสต์ใบเสร็จ
+- แสดงตาราง: เลขที่, วันที่, ชื่อลูกค้า, ยอดรับ, ช่องทางชำระ, ปุ่มดูรายละเอียด, ปุ่มพิมพ์, ปุ่มลบ (admin only)
+- ปุ่ม "+ สร้างใบเสร็จใหม่" นำไปหน้า /receipts/new
+- search bar ค้นหาตามเลขที่/ชื่อลูกค้า
+
+**3. app/(protected)/receipts/new/page.js + ReceiptForm component**
+- ฟอร์มกรอกข้อมูลใบเสร็จ
+- ช่องกรอก: ชื่อลูกค้า, ที่อยู่, เบอร์โทร, เลขผู้เสียภาษี, วันที่ (default วันนี้)
+- ตารางรายการ: เริ่ม 3 แถว, ปุ่ม "+ เพิ่มรายการ" (max 10), ปุ่ม "ลบ" แต่ละแถว, แต่ละแถวมี: รายการ, จำนวน, ราคาต่อหน่วย → คำนวณจำนวนเงินอัตโนมัติ
+- ช่องชำระโดย: radio หรือ select (เงินสด / โอนเงิน / อื่นๆ)
+- ช่องหมายเหตุ
+- ช่องส่วนลด → คำนวณยอดรับสุทธิอัตโนมัติ
+- ปุ่ม "บันทึก" → createReceipt → redirect ไปหน้า /receipts/[id] (preview พร้อมพิมพ์)
+
+**4. app/(protected)/receipts/[id]/page.js + ReceiptPreview component**
+- แสดงใบเสร็จในรูปแบบที่พิมพ์ได้ (ใกล้เคียงแบบฟอร์มในรูป)
+- มี ref ชื่อ receiptRef ครอบทั้งใบ
+- ปุ่ม "🖨 พิมพ์/ดาวน์โหลด PDF" → ใช้ html2canvas แคปทั้งใบแล้วแปลงเป็น PDF (เพื่อให้ภาษาไทยออกถูกต้อง):
+  ```javascript
+  const html2canvas = (await import('html2canvas')).default
+  const { default: jsPDF } = await import('jspdf')
+  const canvas = await html2canvas(receiptRef.current, { scale: 2, backgroundColor: '#ffffff' })
+  const pdf = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' })
+  const imgData = canvas.toDataURL('image/png')
+  const w = pdf.internal.pageSize.getWidth()
+  const h = (canvas.height * w) / canvas.width
+  pdf.addImage(imgData, 'PNG', 0, 0, w, Math.min(h, pdf.internal.pageSize.getHeight()))
+  pdf.save(`ใบเสร็จ-${receipt.receipt_no}.pdf`)
+  ```
+- ปุ่ม "← กลับ" ไปหน้า /receipts
+
+**5. เพิ่มเมนูใน components/Sidebar.js**
+- เพิ่ม { href: '/receipts', label: 'ออกบิล', icon: '🧾', adminOnly: false }
+- วางหลังบรรทัด transactions (รายรับ-รายจ่าย) เพื่อให้ทั้ง admin และ staff ออกบิลได้
+
+**6. โครงสร้างใบเสร็จ (ReceiptPreview) ให้มีองค์ประกอบตามนี้:**
+- หัว: logo (public/logo-full.png) ซ้าย + "ใบเสร็จรับเงิน / RECEIPT" ขวา + เลขที่/วันที่
+- ข้อมูลบริษัท: KLONG ZAND RESORT PHALA, โทร 095-8697918, 096-6762535, 156/29 หมู่ 6 ตำบลพลา อำเภอบ้านฉาง จังหวัดระยอง 21130
+- ข้อมูลลูกค้า
+- ตารางรายการ (header สีเขียวเข้ม #2d5016 ตามแบบฟอร์ม)
+- ช่องชำระ + สรุปยอด
+- ลายเซ็น + ขอบคุณ
+
+**7. ติดตั้ง html2canvas ก่อนถ้ายังไม่มี:**
+   npm install html2canvas
+
+หมายเหตุ: receipt_no สร้างด้วย JavaScript ใน server action โดย:
+```javascript
+const today = new Date().toLocaleDateString('th-TH', {
+  timeZone: 'Asia/Bangkok', year: 'numeric', month: '2-digit', day: '2-digit'
+}).replace(/\//g, '') // → DDMMYYYY ไม่เหมาะ
+// ใช้วิธีนี้แทน:
+const d = new Date(new Date().toLocaleString('en-US', { timeZone: 'Asia/Bangkok' }))
+const dateStr = `${d.getFullYear()}${String(d.getMonth()+1).padStart(2,'0')}${String(d.getDate()).padStart(2,'0')}`
+// แล้ว query count จาก receipts ที่ receipt_no like `RC-${dateStr}-%` เพื่อหาลำดับ
+```
+
+ทำเสร็จแล้ว build ทดสอบก่อน commit แล้วอัปเดต KLONGZAND_PMS_PROMPT.md ให้สะท้อนการแก้ไขนี้ด้วย

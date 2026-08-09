@@ -1,0 +1,47 @@
+ช่วยเพิ่ม PWA ให้ระบบ KLONGZAND PMS (Next.js App Router, JavaScript) รองรับการติดตั้งบนมือถือ ทั้ง Android (Chrome) และ iPhone (Safari) ทำตามนี้:
+
+1. มีไฟล์ icon อยู่ที่ root ของโปรเจกต์แล้ว 3 ไฟล์: icon-512.png, icon-192.png, apple-touch-icon.png (ไอคอนพื้นหลังกรมท่า #001840 มีบ้าน 4 สี) ให้ย้ายทั้ง 3 ไฟล์เข้าไปในโฟลเดอร์ public/
+
+2. สร้างไฟล์ public/manifest.json เนื้อหาดังนี้ (แก้ start_url ให้ตรงกับหน้าแรกหลัง login จริงของระบบ ซึ่งคือ /dashboard):
+
+{
+  "name": "KLONGZAND PMS",
+  "short_name": "KLONGZAND",
+  "start_url": "/dashboard",
+  "display": "standalone",
+  "background_color": "#001840",
+  "theme_color": "#001840",
+  "icons": [
+    { "src": "/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "maskable" },
+    { "src": "/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
+    { "src": "/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ]
+}
+
+3. เปิดไฟล์ middleware.js ที่ root โปรเจกต์ ดูที่ matcher (ตอนนี้น่าจะเป็นแบบนี้):
+   matcher: ['/((?!_next/static|_next/image|favicon.ico|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)']
+   ให้แก้แค่เพิ่ม manifest.json เข้าไปในส่วนที่ยกเว้น (อย่าลบของเดิม แค่เพิ่ม) ให้กลายเป็น:
+   matcher: ['/((?!_next/static|_next/image|favicon.ico|manifest.json|manifest.webmanifest|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)']
+   (รูป icon ที่เพิ่มเป็น .png อยู่แล้วจะถูกยกเว้นจาก matcher เดิมอัตโนมัติ ไม่ต้องเพิ่มอะไรเพิ่มสำหรับไฟล์ icon)
+
+4. แก้ app/layout.js ให้ใส่ metadata ของ PWA ให้ครบ (ใช้ Next.js metadata API ของ App Router) ประมาณนี้:
+   export const metadata = {
+     title: "KLONGZAND PMS",
+     description: "ระบบจัดการรีสอร์ท KLONGZAND",
+     manifest: "/manifest.json",
+     icons: {
+       icon: ["/icon-192.png", "/icon-512.png"],
+       apple: "/apple-touch-icon.png",
+     },
+   }
+   export const viewport = {
+     themeColor: "#001840",
+   }
+   (ถ้า layout.js มี metadata export อยู่แล้ว ให้ merge ค่าพวกนี้เข้าไปแทนการเขียนทับของเดิมทั้งหมด)
+
+5. ไม่ต้องทำ service worker / offline cache เพิ่ม เอาแค่ให้ "เพิ่มลงหน้าจอโฮม" ได้ทั้ง Android Chrome และ iPhone Safari ก็พอ
+
+6. ทดสอบ build ให้ผ่านก่อน แล้วลองเปิดเว็บบนมือถือดูว่าเมนู "เพิ่มลงหน้าจอโฮม" ขึ้นไอคอนและชื่อแอปถูกต้อง
+
+ทำเสร็จแล้ว commit แล้วอัปเดต KLONGZAND_PMS_PROMPT.md ให้สะท้อนการแก้ไขนี้ด้วย
