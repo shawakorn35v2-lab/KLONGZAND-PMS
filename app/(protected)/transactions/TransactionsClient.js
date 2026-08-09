@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import TransactionForm from '@/components/TransactionForm'
 import ExportButtons from '@/components/ExportButtons'
@@ -31,6 +31,45 @@ export default function TransactionsClient({
   const [toDate, setToDate] = useState(to)
   const [deletingId, setDeletingId] = useState(null)
   const [showCategories, setShowCategories] = useState(false)
+
+  // ตัวกรองประเภท/หมวดหมู่ (client-side, ทำงานร่วมกับ date range ที่กรองมาจาก server แล้ว)
+  const [showFilterPanel, setShowFilterPanel] = useState(false)
+  const [typeFilter, setTypeFilter] = useState({ income: true, expense: true })
+  const [categoryFilter, setCategoryFilter] = useState(() => new Set([...incomeCategories, ...expenseCategories]))
+
+  // เพิ่มหมวดหมู่ใหม่ (เช่น จากการจัดการหมวดหมู่) เข้า filter แบบติ๊กไว้ default โดยไม่ล้างการเลือกเดิม
+  useEffect(() => {
+    setCategoryFilter(prev => {
+      const next = new Set(prev)
+      let changed = false
+      for (const name of [...incomeCategories, ...expenseCategories]) {
+        if (!next.has(name)) { next.add(name); changed = true }
+      }
+      return changed ? next : prev
+    })
+  }, [incomeCategories, expenseCategories])
+
+  function toggleType(key) {
+    setTypeFilter(prev => ({ ...prev, [key]: !prev[key] }))
+  }
+  function toggleCategory(name) {
+    setCategoryFilter(prev => {
+      const next = new Set(prev)
+      if (next.has(name)) next.delete(name)
+      else next.add(name)
+      return next
+    })
+  }
+  function selectAllCategories(names) {
+    setCategoryFilter(prev => new Set([...prev, ...names]))
+  }
+  function deselectAllCategories(names) {
+    setCategoryFilter(prev => {
+      const next = new Set(prev)
+      names.forEach(n => next.delete(n))
+      return next
+    })
+  }
 
   // บันทึกขายของ
   const [showSellForm, setShowSellForm] = useState(false)
@@ -80,8 +119,14 @@ export default function TransactionsClient({
     router.refresh()
   }
 
-  const totalIncome = transactions.filter(t => t.tx_type === 'income').reduce((s, t) => s + Number(t.amount), 0)
-  const totalExpense = transactions.filter(t => t.tx_type === 'expense').reduce((s, t) => s + Number(t.amount), 0)
+  const filtered = transactions.filter(t => {
+    const inType = (t.tx_type === 'income' && typeFilter.income) || (t.tx_type === 'expense' && typeFilter.expense)
+    const inCategory = !t.category || categoryFilter.has(t.category)
+    return inType && inCategory
+  })
+
+  const totalIncome = filtered.filter(t => t.tx_type === 'income').reduce((s, t) => s + Number(t.amount), 0)
+  const totalExpense = filtered.filter(t => t.tx_type === 'expense').reduce((s, t) => s + Number(t.amount), 0)
 
   return (
     <div className="space-y-6">
@@ -126,7 +171,7 @@ export default function TransactionsClient({
         )}
         <div className="flex-1" />
         <ExportButtons
-          data={transactions}
+          data={filtered}
           filename={`รายรับ-รายจ่าย-${from}-ถึง-${to}`}
           title={`รายรับ-รายจ่าย ${from} ถึง ${to}`}
           columns={EXPORT_COLS}
@@ -218,6 +263,73 @@ export default function TransactionsClient({
             รีเซ็ต
           </button>
         </div>
+
+        <button
+          type="button"
+          onClick={() => setShowFilterPanel(v => !v)}
+          className="mt-3 text-sm text-blue-600 hover:text-blue-700 font-medium flex items-center gap-1"
+        >
+          {showFilterPanel ? '▴' : '▾'} ตัวกรองเพิ่มเติม (ประเภท/หมวดหมู่)
+        </button>
+
+        {showFilterPanel && (
+          <div className="mt-3 pt-3 border-t border-gray-100 space-y-4">
+            <div>
+              <p className="text-sm font-medium text-gray-700 mb-2">ประเภท</p>
+              <div className="flex flex-wrap gap-4">
+                <label className="flex items-center gap-2 cursor-pointer select-none text-sm">
+                  <input type="checkbox" checked={typeFilter.income} onChange={() => toggleType('income')} className="w-4 h-4 accent-green-600 rounded" />
+                  รายรับ
+                </label>
+                <label className="flex items-center gap-2 cursor-pointer select-none text-sm">
+                  <input type="checkbox" checked={typeFilter.expense} onChange={() => toggleType('expense')} className="w-4 h-4 accent-red-600 rounded" />
+                  รายจ่าย
+                </label>
+              </div>
+            </div>
+
+            {incomeCategories.length > 0 && (
+              <div>
+                <div className="flex items-center justify-between mb-2">
+                  <p className="text-sm font-medium text-gray-700">หมวดรายรับ</p>
+                  <div className="flex gap-2 text-xs">
+                    <button type="button" onClick={() => selectAllCategories(incomeCategories)} className="text-blue-600 hover:text-blue-700">เลือกทั้งหมด</button>
+                    <button type="button" onClick={() => deselectAllCategories(incomeCategories)} className="text-gray-500 hover:text-gray-700">ยกเลิก</button>
+                  </div>
+                </div>
+                <div className="flex flex-wrap gap-3">
+                  {incomeCategories.map(name => (
+                    <label key={name} className="flex items-center gap-1.5 cursor-pointer select-none text-sm">
+                      <input type="checkbox" checked={categoryFilter.has(name)} onChange={() => toggleCategory(name)} className="w-4 h-4 accent-green-600 rounded" />
+                      {name}
+                    </label>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {expenseCategories.length > 0 && (
+              <div>
+                <div className="flex items-center justify-between mb-2">
+                  <p className="text-sm font-medium text-gray-700">หมวดรายจ่าย</p>
+                  <div className="flex gap-2 text-xs">
+                    <button type="button" onClick={() => selectAllCategories(expenseCategories)} className="text-blue-600 hover:text-blue-700">เลือกทั้งหมด</button>
+                    <button type="button" onClick={() => deselectAllCategories(expenseCategories)} className="text-gray-500 hover:text-gray-700">ยกเลิก</button>
+                  </div>
+                </div>
+                <div className="flex flex-wrap gap-3">
+                  {expenseCategories.map(name => (
+                    <label key={name} className="flex items-center gap-1.5 cursor-pointer select-none text-sm">
+                      <input type="checkbox" checked={categoryFilter.has(name)} onChange={() => toggleCategory(name)} className="w-4 h-4 accent-red-600 rounded" />
+                      {name}
+                    </label>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
+        )}
+
         {isAdmin && (
           <div className="mt-3 flex flex-wrap gap-4 text-sm">
             <span>รายรับรวม: <strong className="text-green-600">{formatCurrency(totalIncome)}</strong></span>
@@ -243,10 +355,10 @@ export default function TransactionsClient({
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-100">
-              {transactions.length === 0 && (
+              {filtered.length === 0 && (
                 <tr><td colSpan={7} className="text-center text-gray-400 py-8">ไม่มีรายการ</td></tr>
               )}
-              {transactions.map(t => (
+              {filtered.map(t => (
                 <tr key={t.id} className="hover:bg-gray-50">
                   <td className="table-td">{formatDate(t.tx_date)}</td>
                   <td className="table-td"><TxTypeBadge type={t.tx_type} /></td>
