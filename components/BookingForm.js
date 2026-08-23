@@ -310,6 +310,7 @@ export default function BookingForm({ rooms, bookings, onClose }) {
                   onWheel={e => e.currentTarget.blur()}
                   className="input" placeholder="0.00"
                 />
+                <p className="text-xs text-gray-400 mt-0.5">ใส่จำนวนเงินที่ลูกค้าจ่ายมาแล้ววันนี้ ถ้ายังไม่จ่ายให้ใส่ 0</p>
               </div>
             </div>
           </div>

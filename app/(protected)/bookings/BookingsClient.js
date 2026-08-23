@@ -905,6 +905,35 @@ export default function BookingsClient({ bookings, rooms, today, role, adminName
                           <div className="col-span-2 text-gray-500">📝 {b.note}</div>
                         )}
                       </div>
+                      {(() => {
+                        const txs = b.transactions ?? []
+                        const depositTx = txs.find(t => t.category === 'ค่ามัดจำ')
+                        const roomTx = txs.find(t => t.category === 'ค่าห้อง')
+                        const paidTotal = (depositTx ? Number(depositTx.amount) : 0) + (roomTx ? Number(roomTx.amount) : 0)
+                        const remaining = Number(b.price || 0) - paidTotal
+                        return (
+                          <div className="border-t border-gray-100 pt-2 text-xs space-y-1">
+                            <div className="flex justify-between">
+                              <span className="text-gray-500">ค่าห้องทั้งหมด</span>
+                              <span className="text-gray-900">{formatCurrency(b.price)}</span>
+                            </div>
+                            {depositTx && (
+                              <div className="flex justify-between">
+                                <span className="text-gray-500">รับมัดจำแล้ว</span>
+                                <span className="text-gray-900">{formatCurrency(depositTx.amount)} ({formatDate(depositTx.tx_date)})</span>
+                              </div>
+                            )}
+                            {remaining > 0 ? (
+                              <div className="flex justify-between">
+                                <span className="text-gray-500">คงเหลือต้องเก็บ</span>
+                                <span className="text-red-600 font-medium">{formatCurrency(remaining)}</span>
+                              </div>
+                            ) : (
+                              <div className="text-green-600 font-medium">✓ ชำระครบแล้ว</div>
+                            )}
+                          </div>
+                        )
+                      })()}
                       <div className="pt-2 flex gap-2">
                         {canEdit && (
                           <button

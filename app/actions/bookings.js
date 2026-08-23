@@ -2,7 +2,7 @@
 
 import { revalidatePath } from 'next/cache'
 import { createClient } from '@/lib/supabase-server'
-import { getTodayString } from '@/lib/dateUtils'
+import { getTodayString, getTodayBangkok } from '@/lib/dateUtils'
 import { roundCurrency } from '@/lib/currency'
 
 export async function createBooking({ roomId, customerId, newCustomer, channel, checkinDate, checkoutDate, price, deposit, note, idCardUrl, vehicleRegUrl, stayType, checkinTime, checkoutTime }) {
@@ -86,12 +86,17 @@ export async function createBooking({ roomId, customerId, newCustomer, channel, 
   if (roundedDeposit > 0) {
     const { data: roomData } = await supabase.from('rooms').select('room_no').eq('id', roomId).single()
     const roomNo = roomData?.room_no ?? ''
+    const customerName = newCustomer?.full_name
+      || (await supabase.from('customers').select('full_name').eq('id', cid).single()).data?.full_name
+      || ''
+    const roomPart = roomNo ? ` ห้อง ${roomNo}` : ''
+    const namePart = customerName ? ` (${customerName})` : ''
     await supabase.from('transactions').insert({
-      tx_date: checkinDate,
+      tx_date: getTodayBangkok(),
       tx_type: 'income',
       category: 'ค่ามัดจำ',
       amount: roundedDeposit,
-      note: roomNo ? `มัดจำการจองห้อง ห้อง ${roomNo}` : `มัดจำการจองห้อง`,
+      note: `รับมัดจำ${roomPart}${namePart}`,
       booking_id: booking.id,
       created_by: user.id,
     })
@@ -161,6 +166,11 @@ export async function createMultiBookings({ rooms, customerId, newCustomer, chan
     cid = data.id
   }
 
+  const customerName = newCustomer?.full_name
+    || (cid ? (await supabase.from('customers').select('full_name').eq('id', cid).single()).data?.full_name : null)
+    || ''
+  const todayBangkok = getTodayBangkok()
+
   // Insert N bookings + N deposit transactions; rollback on any failure
   const insertedBookingIds = []
   try {
@@ -193,12 +203,14 @@ export async function createMultiBookings({ rooms, customerId, newCustomer, chan
       if (roundedDeposit > 0) {
         const { data: roomData } = await supabase.from('rooms').select('room_no').eq('id', r.roomId).single()
         const roomNo = roomData?.room_no ?? ''
+        const roomPart = roomNo ? ` ห้อง ${roomNo}` : ''
+        const namePart = customerName ? ` (${customerName})` : ''
         const { error: txErr } = await supabase.from('transactions').insert({
-          tx_date: checkinDate,
+          tx_date: todayBangkok,
           tx_type: 'income',
           category: 'ค่ามัดจำ',
           amount: roundedDeposit,
-          note: roomNo ? `มัดจำการจองห้อง ห้อง ${roomNo}` : `มัดจำการจองห้อง`,
+          note: `รับมัดจำ${roomPart}${namePart}`,
           booking_id: booking.id,
           created_by: user.id,
         })
@@ -245,7 +257,7 @@ export async function checkinBooking(bookingId) {
 
   const { data: booking, error: fetchErr } = await supabase
     .from('bookings')
-    .select('price, deposit, room_id, rooms(room_no)')
+    .select('price, deposit, checkin_date, room_id, rooms(room_no)')
     .eq('id', bookingId)
     .single()
   if (fetchErr) return { error: fetchErr.message }
@@ -269,7 +281,7 @@ export async function checkinBooking(bookingId) {
     if (!existingTx || existingTx.length === 0) {
       const roomNo = booking.rooms?.room_no ?? ''
       await supabase.from('transactions').insert({
-        tx_date: getTodayString(),
+        tx_date: booking.checkin_date,
         tx_type: 'income',
         category: 'ค่าห้อง',
         amount: remaining,
@@ -317,11 +329,12 @@ export async function checkoutBooking(bookingId) {
 export async function cancelBooking(bookingId) {
   const supabase = await createClient()
 
-  // ลบ transactions ที่ผูกกับ booking นี้
+  // ลบเฉพาะ "ค่าห้อง" ที่ยังไม่ได้รับจริง — คงมัดจำ (ค่ามัดจำ) ไว้เสมอตามนโยบายยึดมัดจำ
   await supabase
     .from('transactions')
     .delete()
     .eq('booking_id', bookingId)
+    .eq('category', 'ค่าห้อง')
 
   const { error } = await supabase
     .from('bookings')
