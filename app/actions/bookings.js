@@ -5,6 +5,32 @@ import { createClient } from '@/lib/supabase-server'
 import { getTodayString, getTodayBangkok } from '@/lib/dateUtils'
 import { roundCurrency } from '@/lib/currency'
 
+const TRACKED_FIELDS = ['price', 'deposit', 'checkin_date', 'checkout_date', 'checkin_time',
+  'checkout_time', 'room_id', 'stay_type', 'status', 'channel', 'note']
+
+function auditValue(field, value) {
+  if (value == null) return null
+  // Supabase returns numeric columns as strings (e.g. "550.00") — normalize so
+  // an unchanged price doesn't register as an edit against a freshly-rounded number
+  if (field === 'price' || field === 'deposit') return String(Number(value))
+  // time columns round-trip as "HH:MM:SS" from the DB but the <input type="time"> emits "HH:MM"
+  if (field === 'checkin_time' || field === 'checkout_time') return String(value).slice(0, 5)
+  return String(value)
+}
+
+async function logBookingEdits(supabase, bookingId, before, after, userId, reasonByField = {}) {
+  const edits = []
+  for (const f of TRACKED_FIELDS) {
+    if (after[f] === undefined) continue
+    const oldV = auditValue(f, before[f])
+    const newV = auditValue(f, after[f])
+    if (oldV !== newV) {
+      edits.push({ booking_id: bookingId, field_name: f, old_value: oldV, new_value: newV, edited_by: userId, reason: reasonByField[f] ?? null })
+    }
+  }
+  if (edits.length > 0) await supabase.from('booking_edits').insert(edits)
+}
+
 export async function createBooking({ roomId, customerId, newCustomer, channel, checkinDate, checkoutDate, price, deposit, note, idCardUrl, vehicleRegUrl, stayType, checkinTime, checkoutTime }) {
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
@@ -356,10 +382,10 @@ export async function adminUpdateBooking(bookingId, fields, adminName, oldRoomNo
   const { data: profile } = await supabase.from('profiles').select('role').eq('id', user.id).single()
   if (!['admin', 'staff'].includes(profile?.role)) return { error: 'ไม่มีสิทธิ์ดำเนินการนี้' }
 
-  // Fetch old booking to detect price/deposit change for transaction sync
+  // Fetch old booking to detect field changes for transaction sync + audit log
   const { data: oldBooking } = await supabase
     .from('bookings')
-    .select('price, deposit')
+    .select('price, deposit, checkin_date, checkout_date, checkin_time, checkout_time, room_id, stay_type, status, channel, note')
     .eq('id', bookingId)
     .single()
 
@@ -390,9 +416,29 @@ export async function adminUpdateBooking(bookingId, fields, adminName, oldRoomNo
     stay_type: fields.stay_type ?? 'overnight',
     checkin_time: fields.stay_type === 'temporary' ? (fields.checkin_time || null) : null,
     checkout_time: fields.stay_type === 'temporary' ? (fields.checkout_time || null) : null,
+    updated_at: new Date().toISOString(),
+    updated_by: user.id,
   }).eq('id', bookingId)
 
   if (error) return { error: error.message }
+
+  if (oldBooking) {
+    const savedFields = {
+      room_id: fields.room_id,
+      channel: fields.channel,
+      checkin_date: fields.checkin_date,
+      checkout_date: fields.checkout_date,
+      price: newPrice,
+      deposit: newDeposit,
+      status: fields.status,
+      note: fields.note || null,
+      stay_type: fields.stay_type ?? 'overnight',
+      checkin_time: fields.stay_type === 'temporary' ? (fields.checkin_time || null) : null,
+      checkout_time: fields.stay_type === 'temporary' ? (fields.checkout_time || null) : null,
+    }
+    await logBookingEdits(supabase, bookingId, oldBooking, savedFields, user.id,
+      roomChanged ? { room_id: transferReason || null } : {})
+  }
 
   // Auto-sync transaction amounts when price or deposit changes
   if (oldBooking && (newPrice !== Number(oldBooking.price) || newDeposit !== Number(oldBooking.deposit))) {

@@ -7,6 +7,7 @@ import { createClient } from '@/lib/supabase-browser'
 
 const allNavItems = [
   { href: '/dashboard', label: 'แดชบอร์ด', icon: '📊', adminOnly: true },
+  { href: '/booking-history', label: 'ประวัติการแก้ไข', icon: '🕓', adminOnly: true },
   { href: '/bookings', label: 'จองห้องพัก', icon: '📅', adminOnly: false },
   { href: '/customers', label: 'ลูกค้า', icon: '👥', adminOnly: false },
   { href: '/transactions', label: 'รายรับ-รายจ่าย', icon: '💰', adminOnly: false },

@@ -6,8 +6,9 @@ import BookingForm from '@/components/BookingForm'
 import BookingPrintPreview from '@/components/BookingPrintPreview'
 import { BookingStatusBadge, ChannelBadge } from '@/components/RoomStatusBadge'
 import { checkinBooking, checkoutBooking, cancelBooking, adminUpdateBooking, adminDeleteBooking, getBookingsByIds } from '@/app/actions/bookings'
-import { formatDate, formatShortDate } from '@/lib/dateUtils'
+import { formatDate, formatShortDate, formatDateTime } from '@/lib/dateUtils'
 import { createClient } from '@/lib/supabase-browser'
+import { FIELD_LABEL, formatEditValue } from '@/lib/bookingEditFormat'
 
 function formatCurrency(n) { return '฿' + Number(n || 0).toLocaleString('th-TH', { minimumFractionDigits: 2 }) }
 
@@ -106,6 +107,29 @@ export default function BookingsClient({ bookings, rooms, today, role, adminName
   // Cell popup (click red/blue cell to view bookings)
   const [cellPopup, setCellPopup] = useState(null)
   const [cellDetailBooking, setCellDetailBooking] = useState(null)
+
+  // Booking edit history (per-booking, lazy-loaded when expanded in the detail popup)
+  const [historyState, setHistoryState] = useState({})
+  const roomsById = useMemo(() => Object.fromEntries(rooms.map(r => [r.id, r.room_no])), [rooms])
+
+  async function toggleHistory(bookingId) {
+    const current = historyState[bookingId]
+    if (current?.open) {
+      setHistoryState(s => ({ ...s, [bookingId]: { ...current, open: false } }))
+      return
+    }
+    if (current?.edits) {
+      setHistoryState(s => ({ ...s, [bookingId]: { ...current, open: true } }))
+      return
+    }
+    setHistoryState(s => ({ ...s, [bookingId]: { open: true, loading: true, edits: null, creator: null } }))
+    const supabase = createClient()
+    const [{ data: edits }, { data: bk }] = await Promise.all([
+      supabase.from('booking_edits').select('*, profiles:edited_by(full_name)').eq('booking_id', bookingId).order('edited_at', { ascending: false }),
+      supabase.from('bookings').select('created_at, profiles:created_by(full_name)').eq('id', bookingId).single(),
+    ])
+    setHistoryState(s => ({ ...s, [bookingId]: { open: true, loading: false, edits: edits ?? [], creator: bk ?? null } }))
+  }
 
   // Print preview state
   const [printBookings, setPrintBookings] = useState(null)
@@ -934,6 +958,38 @@ export default function BookingsClient({ bookings, rooms, today, role, adminName
                           </div>
                         )
                       })()}
+                      <div className="border-t border-gray-100 pt-2">
+                        <button
+                          onClick={() => toggleHistory(b.id)}
+                          className="text-xs text-gray-500 hover:text-gray-700 font-medium"
+                        >
+                          {historyState[b.id]?.open ? '▾' : '▸'} ประวัติการแก้ไข
+                          {historyState[b.id]?.edits ? ` (${historyState[b.id].edits.length} ครั้ง)` : ''}
+                        </button>
+                        {historyState[b.id]?.open && (
+                          <div className="mt-2 space-y-2 text-xs">
+                            {historyState[b.id].loading ? (
+                              <div className="text-gray-400">กำลังโหลด...</div>
+                            ) : (
+                              <>
+                                {historyState[b.id].edits.map(e => (
+                                  <div key={e.id} className="border-l-2 border-gray-200 pl-2">
+                                    <div className="text-gray-400">{formatDateTime(e.edited_at)} — {e.profiles?.full_name ?? '—'}</div>
+                                    <div className="text-gray-700">
+                                      แก้ {FIELD_LABEL[e.field_name] ?? e.field_name}: {formatEditValue(e.field_name, e.old_value, roomsById)} → {formatEditValue(e.field_name, e.new_value, roomsById)}
+                                    </div>
+                                    {e.reason && <div className="text-gray-400">เหตุผล: {e.reason}</div>}
+                                  </div>
+                                ))}
+                                <div className="border-l-2 border-gray-200 pl-2">
+                                  <div className="text-gray-400">{formatDateTime(historyState[b.id].creator?.created_at)} — {historyState[b.id].creator?.profiles?.full_name ?? '—'}</div>
+                                  <div className="text-gray-700">สร้างการจอง</div>
+                                </div>
+                              </>
+                            )}
+                          </div>
+                        )}
+                      </div>
                       <div className="pt-2 flex gap-2">
                         {canEdit && (
                           <button
