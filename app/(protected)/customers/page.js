@@ -7,6 +7,7 @@ export default async function CustomersPage() {
     .from('customers')
     .select('id, full_name, phone, note, created_at')
     .order('full_name')
+    .limit(5000)
 
   return (
     <div className="p-4 md:p-6">

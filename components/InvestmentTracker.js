@@ -14,6 +14,7 @@ export default function InvestmentTracker({
   investmentStartDate,
   cumulativeNet,
   avgMonthlyNet,
+  hasError,
 }) {
   const router = useRouter()
   const [editing, setEditing] = useState(false)
@@ -33,7 +34,9 @@ export default function InvestmentTracker({
   const percentDisplay = cost > 0 ? percentRaw.toFixed(1) : '0.0'
 
   let etaText = '—'
-  if (paidBack) {
+  if (hasError) {
+    etaText = 'โหลดข้อมูลไม่สำเร็จ'
+  } else if (paidBack) {
     etaText = 'คืนทุนแล้ว 🎉'
   } else if (cost > 0) {
     if (avgMonthlyNet > 0) {
@@ -88,12 +91,14 @@ export default function InvestmentTracker({
         </div>
         <div>
           <p className="text-xs text-gray-500">กำไรสุทธิสะสม</p>
-          <p className={`text-lg font-bold ${net >= 0 ? 'text-green-700' : 'text-red-600'}`}>{fmt(net)}</p>
+          <p className={`text-lg font-bold ${hasError ? 'text-red-600' : (net >= 0 ? 'text-green-700' : 'text-red-600')}`}>
+            {hasError ? 'โหลดข้อมูลไม่สำเร็จ' : fmt(net)}
+          </p>
         </div>
         <div>
           <p className="text-xs text-gray-500">{paidBack ? 'สถานะ' : 'ยังขาดอีก'}</p>
           <p className={`text-lg font-bold ${paidBack ? 'text-green-700' : 'text-blue-700'}`}>
-            {paidBack ? 'คืนทุนแล้ว!' : fmt(remaining)}
+            {hasError ? '—' : (paidBack ? 'คืนทุนแล้ว!' : fmt(remaining))}
           </p>
         </div>
       </div>

@@ -8,22 +8,22 @@ function formatCurrency(v) {
   return '฿' + Number(v).toLocaleString('th-TH')
 }
 
-export default function MonthlySalesChart({ transactions }) {
+export default function MonthlySalesChart({ monthlyStats }) {
   const now = new Date()
   const months = []
   for (let i = 11; i >= 0; i--) {
     const d = new Date(now.getFullYear(), now.getMonth() - i, 1)
-    months.push({ year: d.getFullYear(), month: d.getMonth(), label: MONTHS_TH[d.getMonth()] })
+    const monthKey = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`
+    months.push({ monthKey, label: MONTHS_TH[d.getMonth()] })
   }
 
   const data = months.map(m => {
-    const monthTxs = (transactions ?? []).filter(t => {
-      const [ty, tm] = t.tx_date.split('-').map(Number)
-      return ty === m.year && (tm - 1) === m.month
-    })
-    const income = monthTxs.filter(t => t.tx_type === 'income').reduce((s, t) => s + Number(t.amount), 0)
-    const expense = monthTxs.filter(t => t.tx_type === 'expense').reduce((s, t) => s + Number(t.amount), 0)
-    return { name: m.label, รายรับ: income, รายจ่าย: expense }
+    const stat = (monthlyStats ?? []).find(s => s.month_key === m.monthKey)
+    return {
+      name: m.label,
+      รายรับ: Number(stat?.income ?? 0),
+      รายจ่าย: Number(stat?.expense ?? 0),
+    }
   })
 
   return (

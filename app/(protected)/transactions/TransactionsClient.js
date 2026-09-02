@@ -21,7 +21,9 @@ const EXPORT_COLS = [
 ]
 
 export default function TransactionsClient({
-  transactions, today, from, to,
+  transactions, exportTransactions, exportLimitReached, rangeTotals,
+  page, totalPages, totalCount,
+  today, from, to,
   todayIncome, todayExpense, saleItems, isAdmin,
   categories, incomeCategories, expenseCategories, categoryUsage,
 }) {
@@ -81,6 +83,10 @@ export default function TransactionsClient({
     router.push(`/transactions?dateFrom=${fromDate}&dateTo=${toDate}`)
   }
 
+  function goToPage(p) {
+    router.push(`/transactions?dateFrom=${from}&dateTo=${to}&page=${p}`)
+  }
+
   async function handleDelete(id, txDate, category) {
     const isSale = category === 'ขายของ'
     const msg = isSale
@@ -120,15 +126,17 @@ export default function TransactionsClient({
   }
 
   const knownCategoryNames = new Set(categories.map(c => c.name))
-  const filtered = transactions.filter(t => {
+  function matchesFilter(t) {
     const inType = (t.tx_type === 'income' && typeFilter.income) || (t.tx_type === 'expense' && typeFilter.expense)
     // category ที่ไม่ตรงกับหมวดหมู่ที่รู้จัก (เช่น พิมพ์เองอิสระในอดีต) ต้องผ่านเสมอ ไม่ให้ checkbox กรองหาย
     const inCategory = !knownCategoryNames.has(t.category) || categoryFilter.has(t.category)
     return inType && inCategory
-  })
+  }
 
-  const totalIncome = filtered.filter(t => t.tx_type === 'income').reduce((s, t) => s + Number(t.amount), 0)
-  const totalExpense = filtered.filter(t => t.tx_type === 'expense').reduce((s, t) => s + Number(t.amount), 0)
+  // ตาราง: กรองเฉพาะหน้าปัจจุบัน (transactions มาจาก .range() pagination)
+  const filtered = transactions.filter(matchesFilter)
+  // Export: กรองจากช่วงวันที่ทั้งหมด (สูงสุด 5,000 แถว แยกจาก query ที่ paginate ตาราง)
+  const exportFiltered = exportTransactions.filter(matchesFilter)
 
   return (
     <div className="space-y-6">
@@ -172,12 +180,19 @@ export default function TransactionsClient({
           </button>
         )}
         <div className="flex-1" />
-        <ExportButtons
-          data={filtered}
-          filename={`รายรับ-รายจ่าย-${from}-ถึง-${to}`}
-          title={`รายรับ-รายจ่าย ${from} ถึง ${to}`}
-          columns={EXPORT_COLS}
-        />
+        <div className="flex flex-col items-end gap-1">
+          <ExportButtons
+            data={exportFiltered}
+            filename={`รายรับ-รายจ่าย-${from}-ถึง-${to}`}
+            title={`รายรับ-รายจ่าย ${from} ถึง ${to}`}
+            columns={EXPORT_COLS}
+          />
+          {exportLimitReached && (
+            <p className="text-xs text-amber-600">
+              ⚠ ข้อมูลอาจถูกตัด (ถึงขีดจำกัด 5,000 แถว) — export อาจไม่ครบทุกรายการ
+            </p>
+          )}
+        </div>
       </div>
 
       {/* Add form */}
@@ -333,10 +348,11 @@ export default function TransactionsClient({
         )}
 
         {isAdmin && (
-          <div className="mt-3 flex flex-wrap gap-4 text-sm">
-            <span>รายรับรวม: <strong className="text-green-600">{formatCurrency(totalIncome)}</strong></span>
-            <span>รายจ่ายรวม: <strong className="text-red-600">{formatCurrency(totalExpense)}</strong></span>
-            <span>กำไรสุทธิ: <strong className={totalIncome - totalExpense >= 0 ? 'text-blue-600' : 'text-red-600'}>{formatCurrency(totalIncome - totalExpense)}</strong></span>
+          <div className="mt-3 flex flex-wrap items-center gap-4 text-sm">
+            <span>รายรับรวม: <strong className="text-green-600">{formatCurrency(rangeTotals.income)}</strong></span>
+            <span>รายจ่ายรวม: <strong className="text-red-600">{formatCurrency(rangeTotals.expense)}</strong></span>
+            <span>กำไรสุทธิ: <strong className={rangeTotals.net >= 0 ? 'text-blue-600' : 'text-red-600'}>{formatCurrency(rangeTotals.net)}</strong></span>
+            <span className="text-gray-400 text-xs">(ทั้งช่วงวันที่ {from} – {to} ไม่ขึ้นกับตัวกรองประเภท/หมวดหมู่ด้านบน)</span>
           </div>
         )}
       </div>
@@ -388,6 +404,19 @@ export default function TransactionsClient({
             </tbody>
           </table>
         </div>
+        {totalPages > 1 && (
+          <div className="flex items-center justify-between px-4 py-3 border-t border-gray-100 text-sm">
+            <span className="text-gray-500">หน้า {page} จาก {totalPages} ({totalCount.toLocaleString('th-TH')} รายการ)</span>
+            <div className="flex gap-2">
+              <button disabled={page <= 1} onClick={() => goToPage(page - 1)} className="btn-secondary disabled:opacity-50">
+                ก่อนหน้า
+              </button>
+              <button disabled={page >= totalPages} onClick={() => goToPage(page + 1)} className="btn-secondary disabled:opacity-50">
+                ถัดไป
+              </button>
+            </div>
+          </div>
+        )}
       </div>
     </div>
   )
