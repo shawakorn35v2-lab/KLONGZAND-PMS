@@ -1,0 +1,43 @@
+ขอแก้การแสดงผลกริดห้องพัก (หน้าจองห้องพัก) ให้แสดงประวัติการจองในวันที่ผ่านมาด้วย
+
+**ปัญหา:**
+ปัจจุบัน grid ซ่อน booking ที่ status = 'checked_out' หรือ 'cancelled' ออกทั้งหมด
+→ ทำให้วันที่ผ่านมา (เมื่อวาน, เมื่อ 2-3 วันก่อน) ช่องทุกห้องแสดงสีเขียว (ว่าง) ทั้งหมด
+→ ไม่มีประวัติการจองให้ดูเลย
+
+**วิธีแก้ — แยก logic ตามวันที่:**
+
+```js
+const today = new Date()
+today.setHours(0, 0, 0, 0)
+
+const cellDate = new Date(date) // วันที่ของช่องนั้นใน grid
+cellDate.setHours(0, 0, 0, 0)
+
+const isPast = cellDate < today
+
+// กรอง booking ที่จะแสดงในช่องนี้
+const bookingsInCell = allBookings.filter(b => {
+  // ตรวจว่า booking overlap กับวันนี้ (logic เดิม)
+  const overlaps = /* date overlap check เดิม */
+
+  if (!overlaps) return false
+
+  if (isPast) {
+    // วันที่ผ่านมา: แสดงทุก status ยกเว้น cancelled เท่านั้น
+    return b.status !== 'cancelled'
+  } else {
+    // วันนี้และอนาคต: ซ่อน checked_out และ cancelled
+    return b.status !== 'checked_out' && b.status !== 'cancelled'
+  }
+})
+```
+
+**ผลลัพธ์ที่ต้องการ:**
+- วันที่ผ่านมา → ช่องห้องแสดงสีชมพู/ฟ้าตามประเภทการจองเหมือนเดิม (รวม checked_out)
+- วันนี้ → ห้องที่ checked_out แล้ว แสดงสีเขียว (ว่าง ขายได้)
+- อนาคต → แสดงเฉพาะ booking ที่ active
+
+หมายเหตุ: ตรวจสอบชื่อตัวแปรและ logic overlap ให้ตรงกับ code จริงในไฟล์
+
+ทำเสร็จแล้ว build ทดสอบ commit push แล้วอัปเดต KLONGZAND_PMS_PROMPT.md ด้วย

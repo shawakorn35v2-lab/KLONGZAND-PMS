@@ -1,0 +1,132 @@
+ขอเพิ่มระบบบันทึกประวัติการแก้ไขการจอง (audit log) เพื่อให้ตามได้ว่าใครแก้ข้อมูลการจอง แก้อะไร เมื่อไหร่
+
+**บริบทปัญหา:**
+พบว่าราคาห้องในการจองถูกแก้จาก 550 เป็น 600 แต่ระบบไม่ได้เก็บว่าใครแก้ ตรวจสอบย้อนหลังไม่ได้
+ตาราง bookings มีแค่ created_by / created_at ไม่มี updated_by / updated_at
+
+**SQL migration รันใน Supabase แล้ว** (ไฟล์ supabase_schema_booking_audit.sql)
+สร้างตาราง booking_edits:
+- id, booking_id, field_name, old_value, new_value, edited_by, edited_at, reason
+- append-only (RLS อนุญาตแค่ select + insert)
+และเพิ่ม column updated_at / updated_by ในตาราง bookings
+
+───────────────────────────
+1. บันทึก log ตอนแก้ไขการจอง
+───────────────────────────
+
+ในฟังก์ชัน updateBooking() (app/actions/bookings.js หรือไฟล์ที่เกี่ยวข้อง):
+
+ก่อน update ให้ query ข้อมูลเดิมมาเปรียบเทียบ แล้ว insert booking_edits ทุก field ที่เปลี่ยน
+
+```js
+// 1. ดึงข้อมูลเดิม
+const { data: before } = await supabase
+  .from('bookings')
+  .select('*')
+  .eq('id', bookingId)
+  .single()
+
+// 2. field ที่ต้องติดตาม
+const TRACKED = ['price', 'deposit', 'checkin_date', 'checkout_date',
+                 'checkin_time', 'checkout_time', 'room_id',
+                 'stay_type', 'status', 'channel', 'note']
+
+// 3. หา field ที่เปลี่ยน
+const edits = []
+for (const f of TRACKED) {
+  if (payload[f] === undefined) continue
+  const oldV = before[f] === null ? null : String(before[f])
+  const newV = payload[f] === null ? null : String(payload[f])
+  if (oldV !== newV) {
+    edits.push({
+      booking_id: bookingId,
+      field_name: f,
+      old_value: oldV,
+      new_value: newV,
+      edited_by: user.id,
+    })
+  }
+}
+
+// 4. update การจอง + ประทับเวลา
+await supabase.from('bookings').update({
+  ...payload,
+  updated_at: new Date().toISOString(),
+  updated_by: user.id,
+}).eq('id', bookingId)
+
+// 5. บันทึก log
+if (edits.length > 0) {
+  await supabase.from('booking_edits').insert(edits)
+}
+```
+
+**สำคัญ:** ต้องทำแบบเดียวกันในทุกจุดที่มีการ update bookings เช่น
+- แก้ไขการจากหน้ารายละเอียด
+- เปลี่ยนห้อง
+- แก้ราคา / มัดจำ
+- เลื่อนวันเข้าพัก
+(ยกเว้น checkinBooking / checkoutBooking ที่แค่เปลี่ยน status — จะ log status ก็ได้)
+
+แนะนำ: แยกเป็น helper function `logBookingEdits(bookingId, before, payload, userId)` เรียกใช้ซ้ำได้
+
+───────────────────────────
+2. แสดงประวัติในหน้ารายละเอียดการจอง
+───────────────────────────
+
+เพิ่มส่วน "ประวัติการแก้ไข" ท้ายหน้ารายละเอียดการจอง (collapsible ปิดไว้ default)
+
+query:
+```js
+const { data: history } = await supabase
+  .from('booking_edits')
+  .select('*, profiles:edited_by(full_name)')
+  .eq('booking_id', bookingId)
+  .order('edited_at', { ascending: false })
+```
+
+แสดงเป็นรายการ ภาษาไทยเข้าใจง่าย:
+
+```
+▼ ประวัติการแก้ไข (3 ครั้ง)
+
+  23/08/2569 14:20 — เพชร
+  แก้ ราคาห้อง : 550 → 600
+
+  20/08/2569 09:15 — เจ้นท์
+  แก้ วันเช็คเอาท์ : 24/08/2569 → 25/08/2569
+
+  09/08/2569 21:33 — เพชร
+  สร้างการจอง
+```
+
+**แปลชื่อ field เป็นภาษาไทย:**
+```js
+const FIELD_LABEL = {
+  price:         'ราคาห้อง',
+  deposit:       'เงินมัดจำ',
+  checkin_date:  'วันเช็คอิน',
+  checkout_date: 'วันเช็คเอาท์',
+  checkin_time:  'เวลาเช็คอิน',
+  checkout_time: 'เวลาเช็คเอาท์',
+  room_id:       'ห้องพัก',
+  stay_type:     'ประเภทการพัก',
+  status:        'สถานะ',
+  channel:       'ช่องทางการจอง',
+  note:          'หมายเหตุ',
+}
+```
+
+- field ที่เป็นวันที่ → format เป็น dd/MM/yyyy พ.ศ.
+- field room_id → แสดงเป็นชื่อห้อง (join rooms.room_no) ไม่ใช่ uuid
+- field ที่เป็นเงิน → ใส่ comma และ "บาท"
+
+───────────────────────────
+3. หน้ารวมประวัติทั้งระบบ (optional)
+───────────────────────────
+
+ถ้าทำได้ เพิ่มเมนู "ประวัติการแก้ไข" สำหรับแอดมินเท่านั้น
+แสดง booking_edits ทั้งหมด เรียงล่าสุดก่อน มี filter ช่วงวันที่ + กรองตามพนักงาน
+เพื่อให้เจ้าของตรวจสอบย้อนหลังได้ง่าย
+
+ทำเสร็จแล้ว build ทดสอบ commit push แล้วอัปเดต KLONGZAND_PMS_PROMPT.md ด้วย

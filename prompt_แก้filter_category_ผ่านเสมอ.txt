@@ -1,0 +1,30 @@
+ขอแก้ logic filter หมวดหมู่ในหน้ารายรับ-รายจ่าย (TransactionsClient.js หรือไฟล์ที่เกี่ยวข้อง)
+
+**ปัญหา:**
+รายการเก่าที่พนักงานพิมพ์ category เองอิสระ (เช่น "ขายของ", "ค่าห้อง (เงินสด)", "ค่าน้ำประปา") ไม่ตรงกับชื่อใน transaction_categories
+→ filter checkbox กรองรายการเหล่านั้นออกไป ทำให้ยอดรวมไม่ครบ
+
+**วิธีแก้:**
+
+ในส่วน filter logic ที่กรอง category ให้เปลี่ยนจาก:
+```js
+const inCategory = categoryFilter.has(tx.category)
+```
+
+เป็น:
+```js
+// รายการที่ category ไม่มีในตาราง transaction_categories → แสดงเสมอ
+const knownCategories = new Set(categories.map(c => c.name))
+const inCategory = !knownCategories.has(tx.category) || categoryFilter.has(tx.category)
+```
+
+ความหมาย:
+- ถ้า tx.category ไม่อยู่ในรายการ transaction_categories → ผ่านเสมอ (แสดงเสมอ)
+- ถ้า tx.category อยู่ในรายการ transaction_categories → ดูว่า checkbox ติ๊กไว้หรือเปล่า
+
+**หมายเหตุ:**
+- `categories` คือ array ที่ fetch มาจาก transaction_categories ใช้อยู่แล้วในไฟล์
+- ตรวจสอบชื่อตัวแปรให้ตรงกับ code จริง
+- logic เดิมสำหรับ typeFilter และ date range ไม่ต้องแก้
+
+ทำเสร็จแล้ว build ทดสอบ commit push แล้วอัปเดต KLONGZAND_PMS_PROMPT.md ด้วย
