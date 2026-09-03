@@ -9,6 +9,10 @@ const FORMATTERS = {
   number2: (v) => Number(v ?? 0).toFixed(2),
   currency: (v) => Number(v ?? 0).toLocaleString('th-TH', { minimumFractionDigits: 2 }),
   date: (v) => v ?? '',
+  // created_at เป็น timestamptz (UTC) ต้องระบุ timeZone ไม่งั้นเพี้ยน 7 ชม.
+  time: (v) => v
+    ? new Date(v).toLocaleTimeString('th-TH', { timeZone: 'Asia/Bangkok', hour: '2-digit', minute: '2-digit' })
+    : '',
   nullable: (v) => v ?? '',
   text: (v) => String(v ?? ''),
 }

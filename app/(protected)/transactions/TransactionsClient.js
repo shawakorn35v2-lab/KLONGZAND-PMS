@@ -13,6 +13,7 @@ function formatCurrency(n) { return '฿' + Number(n || 0).toLocaleString('th-TH
 
 const EXPORT_COLS = [
   { key: 'tx_date', header: 'วันที่', format: 'date' },
+  { key: 'created_at', header: 'เวลาบันทึก', format: 'time' },
   { key: 'tx_type', header: 'ประเภท', format: 'txtype' },
   { key: 'category', header: 'หมวดหมู่' },
   { key: 'room_no', header: 'ห้อง', format: 'nullable' },
