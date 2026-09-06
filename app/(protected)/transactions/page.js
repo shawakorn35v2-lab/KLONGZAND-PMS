@@ -2,20 +2,16 @@ import { createClient } from '@/lib/supabase-server'
 import TransactionsClient from './TransactionsClient'
 import { getTodayString } from '@/lib/dateUtils'
 
-const PAGE_SIZE = 100
 const EXPORT_LIMIT = 5000
 
 export default async function TransactionsPage({ searchParams }) {
-  const { dateFrom, dateTo, page: pageParam } = await searchParams ?? {}
+  const { dateFrom, dateTo } = await searchParams ?? {}
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
   const today = getTodayString()
 
   const from = dateFrom || today
   const to = dateTo || today
-  const page = Math.max(1, Number(pageParam) || 1)
-  const rangeFrom = (page - 1) * PAGE_SIZE
-  const rangeTo = rangeFrom + PAGE_SIZE - 1
 
   const { data: profile } = await supabase
     .from('profiles')
@@ -24,39 +20,28 @@ export default async function TransactionsPage({ searchParams }) {
     .single()
   const isAdmin = profile?.role === 'admin'
 
-  // ตารางแสดงผล — ใช้ .range() pagination จริง ไม่มีทางถูกตัดแถวเงียบๆ ไม่ว่า Max Rows ระดับโปรเจกต์จะตั้งไว้เท่าไหร่
-  let txPageQuery = supabase
-    .from('transactions')
-    .select('*, bookings(room_id, rooms(room_no))', { count: 'exact' })
-    .gte('tx_date', from)
-    .lte('tx_date', to)
-    .order('created_at', { ascending: false })
-    .range(rangeFrom, rangeTo)
-  if (!isAdmin) txPageQuery = txPageQuery.eq('created_by', user.id)
-
-  // สำหรับ Export + ยอดที่กรองด้วย checkbox ประเภท/หมวดหมู่ (ต้องเห็นทั้งช่วงวันที่ ไม่ใช่แค่หน้าปัจจุบัน)
-  let txExportQuery = supabase
+  // ดึงทั้งช่วงวันที่ (สูงสุด 5,000 แถว) ใช้ทั้งแสดงตารางและ export — ค้นหา/กรอง/แบ่งหน้าทำที่ฝั่ง client จากก้อนนี้ก้อนเดียว
+  // (เดิมเคยแยก query หน้าปัจจุบันด้วย .range() ต่างหาก ทำให้ค้นหา/กด "ถัดไป" ไม่เจอข้อมูลนอกหน้าที่โหลดมา — แก้แล้ว 2026-09-06)
+  let txQuery = supabase
     .from('transactions')
     .select('*, bookings(room_id, rooms(room_no))')
     .gte('tx_date', from)
     .lte('tx_date', to)
     .order('created_at', { ascending: false })
     .limit(EXPORT_LIMIT)
-  if (!isAdmin) txExportQuery = txExportQuery.eq('created_by', user.id)
+  if (!isAdmin) txQuery = txQuery.eq('created_by', user.id)
 
   let todayQuery = supabase.from('transactions').select('tx_type, amount').eq('tx_date', today)
   if (!isAdmin) todayQuery = todayQuery.eq('created_by', user.id)
 
   const [
-    { data: transactions, count: totalCount },
-    { data: exportTransactions },
+    { data: transactions },
     { data: todayRows },
     { data: saleItems },
     { data: categories },
     { data: totalsRpc },
   ] = await Promise.all([
-    txPageQuery,
-    txExportQuery,
+    txQuery,
     todayQuery,
     supabase
       .from('inventory_items')
@@ -101,12 +86,9 @@ export default async function TransactionsPage({ searchParams }) {
 
   const mapRoom = t => ({ ...t, room_no: t.bookings?.rooms?.room_no ?? null })
   const txs = (transactions ?? []).map(mapRoom)
-  const exportTxs = (exportTransactions ?? []).map(mapRoom)
 
   const todayIncome = (todayRows ?? []).filter(t => t.tx_type === 'income').reduce((s, t) => s + Number(t.amount), 0)
   const todayExpense = (todayRows ?? []).filter(t => t.tx_type === 'expense').reduce((s, t) => s + Number(t.amount), 0)
-
-  const totalPages = Math.max(1, Math.ceil((totalCount ?? 0) / PAGE_SIZE))
 
   return (
     <div className="p-4 md:p-6 space-y-4 md:space-y-6">
@@ -116,12 +98,8 @@ export default async function TransactionsPage({ searchParams }) {
       </div>
       <TransactionsClient
         transactions={txs}
-        exportTransactions={exportTxs}
-        exportLimitReached={exportTxs.length === EXPORT_LIMIT}
+        limitReached={txs.length === EXPORT_LIMIT}
         rangeTotals={rangeTotals}
-        page={page}
-        totalPages={totalPages}
-        totalCount={totalCount ?? 0}
         today={today}
         from={from}
         to={to}

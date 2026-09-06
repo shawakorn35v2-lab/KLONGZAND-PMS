@@ -21,9 +21,10 @@ const EXPORT_COLS = [
   { key: 'note', header: 'หมายเหตุ', format: 'nullable' },
 ]
 
+const CLIENT_PAGE_SIZE = 100
+
 export default function TransactionsClient({
-  transactions, exportTransactions, exportLimitReached, rangeTotals,
-  page, totalPages, totalCount,
+  transactions, limitReached, rangeTotals,
   today, from, to,
   todayIncome, todayExpense, saleItems, isAdmin,
   categories, incomeCategories, expenseCategories, categoryUsage,
@@ -40,6 +41,10 @@ export default function TransactionsClient({
   const [typeFilter, setTypeFilter] = useState({ income: true, expense: true })
   const [categoryFilter, setCategoryFilter] = useState(() => new Set([...incomeCategories, ...expenseCategories]))
   const [search, setSearch] = useState('')
+  const [clientPage, setClientPage] = useState(1)
+
+  // กลับไปหน้า 1 เสมอเมื่อช่วงวันที่/ตัวกรอง/คำค้นหาเปลี่ยน กันหลุดไปหน้าที่ไม่มีข้อมูลหลัง filter เปลี่ยน
+  useEffect(() => { setClientPage(1) }, [from, to, search, typeFilter, categoryFilter])
 
   // เพิ่มหมวดหมู่ใหม่ (เช่น จากการจัดการหมวดหมู่) เข้า filter แบบติ๊กไว้ default โดยไม่ล้างการเลือกเดิม
   useEffect(() => {
@@ -83,10 +88,6 @@ export default function TransactionsClient({
 
   function applyFilter() {
     router.push(`/transactions?dateFrom=${fromDate}&dateTo=${toDate}`)
-  }
-
-  function goToPage(p) {
-    router.push(`/transactions?dateFrom=${from}&dateTo=${to}&page=${p}`)
   }
 
   async function handleDelete(id, txDate, category) {
@@ -138,10 +139,12 @@ export default function TransactionsClient({
     return inType && inCategory && inSearch
   }
 
-  // ตาราง: กรองเฉพาะหน้าปัจจุบัน (transactions มาจาก .range() pagination)
+  // กรอง+แบ่งหน้าฝั่ง client จากข้อมูลทั้งช่วงวันที่ (สูงสุด 5,000 แถว) — ไม่พึ่ง server pagination อีกต่อไป
+  // แก้บั๊ก: ค้นหา/กรองไม่เจอข้อมูลที่อยู่นอกหน้าปัจจุบัน + กด "ถัดไป" แล้วว่างเปล่า
   const filtered = transactions.filter(matchesFilter)
-  // Export: กรองจากช่วงวันที่ทั้งหมด (สูงสุด 5,000 แถว แยกจาก query ที่ paginate ตาราง)
-  const exportFiltered = exportTransactions.filter(matchesFilter)
+  const totalPages = Math.max(1, Math.ceil(filtered.length / CLIENT_PAGE_SIZE))
+  const page = Math.min(clientPage, totalPages)
+  const pageRows = filtered.slice((page - 1) * CLIENT_PAGE_SIZE, page * CLIENT_PAGE_SIZE)
 
   return (
     <div className="space-y-6">
@@ -187,14 +190,14 @@ export default function TransactionsClient({
         <div className="flex-1" />
         <div className="flex flex-col items-end gap-1">
           <ExportButtons
-            data={exportFiltered}
+            data={filtered}
             filename={`รายรับ-รายจ่าย-${from}-ถึง-${to}`}
             title={`รายรับ-รายจ่าย ${from} ถึง ${to}`}
             columns={EXPORT_COLS}
           />
-          {exportLimitReached && (
+          {limitReached && (
             <p className="text-xs text-amber-600">
-              ⚠ ข้อมูลอาจถูกตัด (ถึงขีดจำกัด 5,000 แถว) — export อาจไม่ครบทุกรายการ
+              ⚠ ข้อมูลอาจถูกตัด (ถึงขีดจำกัด 5,000 แถว) — ตาราง/export อาจไม่ครบทุกรายการ
             </p>
           )}
         </div>
@@ -397,10 +400,10 @@ export default function TransactionsClient({
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-100">
-              {filtered.length === 0 && (
+              {pageRows.length === 0 && (
                 <tr><td colSpan={7} className="text-center text-gray-400 py-8">ไม่มีรายการ</td></tr>
               )}
-              {filtered.map(t => (
+              {pageRows.map(t => (
                 <tr key={t.id} className="hover:bg-gray-50">
                   <td className="table-td">{formatDate(t.tx_date)}</td>
                   <td className="table-td"><TxTypeBadge type={t.tx_type} /></td>
@@ -430,12 +433,12 @@ export default function TransactionsClient({
         </div>
         {totalPages > 1 && (
           <div className="flex items-center justify-between px-4 py-3 border-t border-gray-100 text-sm">
-            <span className="text-gray-500">หน้า {page} จาก {totalPages} ({totalCount.toLocaleString('th-TH')} รายการ)</span>
+            <span className="text-gray-500">หน้า {page} จาก {totalPages} ({filtered.length.toLocaleString('th-TH')} รายการ)</span>
             <div className="flex gap-2">
-              <button disabled={page <= 1} onClick={() => goToPage(page - 1)} className="btn-secondary disabled:opacity-50">
+              <button disabled={page <= 1} onClick={() => setClientPage(p => p - 1)} className="btn-secondary disabled:opacity-50">
                 ก่อนหน้า
               </button>
-              <button disabled={page >= totalPages} onClick={() => goToPage(page + 1)} className="btn-secondary disabled:opacity-50">
+              <button disabled={page >= totalPages} onClick={() => setClientPage(p => p + 1)} className="btn-secondary disabled:opacity-50">
                 ถัดไป
               </button>
             </div>
