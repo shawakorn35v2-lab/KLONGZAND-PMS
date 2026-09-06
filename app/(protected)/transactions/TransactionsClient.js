@@ -39,6 +39,7 @@ export default function TransactionsClient({
   const [showFilterPanel, setShowFilterPanel] = useState(false)
   const [typeFilter, setTypeFilter] = useState({ income: true, expense: true })
   const [categoryFilter, setCategoryFilter] = useState(() => new Set([...incomeCategories, ...expenseCategories]))
+  const [search, setSearch] = useState('')
 
   // เพิ่มหมวดหมู่ใหม่ (เช่น จากการจัดการหมวดหมู่) เข้า filter แบบติ๊กไว้ default โดยไม่ล้างการเลือกเดิม
   useEffect(() => {
@@ -127,11 +128,14 @@ export default function TransactionsClient({
   }
 
   const knownCategoryNames = new Set(categories.map(c => c.name))
+  const searchQuery = search.trim().toLowerCase()
   function matchesFilter(t) {
     const inType = (t.tx_type === 'income' && typeFilter.income) || (t.tx_type === 'expense' && typeFilter.expense)
     // category ที่ไม่ตรงกับหมวดหมู่ที่รู้จัก (เช่น พิมพ์เองอิสระในอดีต) ต้องผ่านเสมอ ไม่ให้ checkbox กรองหาย
     const inCategory = !knownCategoryNames.has(t.category) || categoryFilter.has(t.category)
-    return inType && inCategory
+    const inSearch = !searchQuery || [t.category, t.note, t.room_no]
+      .some(v => v != null && String(v).toLowerCase().includes(searchQuery))
+    return inType && inCategory && inSearch
   }
 
   // ตาราง: กรองเฉพาะหน้าปัจจุบัน (transactions มาจาก .range() pagination)
@@ -280,6 +284,25 @@ export default function TransactionsClient({
           <button onClick={() => { setFromDate(today); setToDate(today); router.push('/transactions') }} className="text-sm text-gray-500 hover:text-gray-700">
             รีเซ็ต
           </button>
+          <div className="relative sm:ml-auto">
+            <input
+              type="text"
+              value={search}
+              onChange={e => setSearch(e.target.value)}
+              placeholder="ค้นหาหมวดหมู่ / หมายเหตุ / ห้อง..."
+              className="input sm:max-w-xs pr-8"
+            />
+            {search && (
+              <button
+                type="button"
+                onClick={() => setSearch('')}
+                className="absolute right-2 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
+                title="ล้างคำค้นหา"
+              >
+                ✕
+              </button>
+            )}
+          </div>
         </div>
 
         <button
