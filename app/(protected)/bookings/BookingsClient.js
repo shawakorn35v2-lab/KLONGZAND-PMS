@@ -931,20 +931,30 @@ export default function BookingsClient({ bookings, rooms, today, role, adminName
                       </div>
                       {(() => {
                         const txs = b.transactions ?? []
-                        const depositTx = txs.find(t => t.category === 'ค่ามัดจำ')
-                        const roomTx = txs.find(t => t.category === 'ค่าห้อง')
-                        const paidTotal = (depositTx ? Number(depositTx.amount) : 0) + (roomTx ? Number(roomTx.amount) : 0)
+                        const depositTxs = txs.filter(t => t.category === 'ค่ามัดจำ')
+                        const roomTxs = txs.filter(t => t.category === 'ค่าห้อง')
+                        const depositTotal = depositTxs.reduce((sum, t) => sum + Number(t.amount), 0)
+                        const roomTotal = roomTxs.reduce((sum, t) => sum + Number(t.amount), 0)
+                        const paidTotal = depositTotal + roomTotal
                         const remaining = Number(b.price || 0) - paidTotal
+                        const depositMismatch = Number(b.deposit) > 0 && depositTxs.length === 0
                         return (
                           <div className="border-t border-gray-100 pt-2 text-xs space-y-1">
+                            {depositMismatch && (
+                              <div className="bg-orange-50 text-orange-700 px-2 py-1 rounded font-medium">
+                                ⚠️ มัดจำในการจอง {formatCurrency(b.deposit)} ยังไม่ได้ลงรายรับ
+                              </div>
+                            )}
                             <div className="flex justify-between">
                               <span className="text-gray-500">ค่าห้องทั้งหมด</span>
                               <span className="text-gray-900">{formatCurrency(b.price)}</span>
                             </div>
-                            {depositTx && (
+                            {depositTxs.length > 0 && (
                               <div className="flex justify-between">
                                 <span className="text-gray-500">รับมัดจำแล้ว</span>
-                                <span className="text-gray-900">{formatCurrency(depositTx.amount)} ({formatDate(depositTx.tx_date)})</span>
+                                <span className="text-gray-900">
+                                  {formatCurrency(depositTotal)} ({depositTxs.map(t => formatDate(t.tx_date)).join(', ')})
+                                </span>
                               </div>
                             )}
                             {remaining > 0 ? (

@@ -31,6 +31,74 @@ async function logBookingEdits(supabase, bookingId, before, after, userId, reaso
   if (edits.length > 0) await supabase.from('booking_edits').insert(edits)
 }
 
+// Upsert the 'ค่ามัดจำ' income row for a booking so it always matches bookings.deposit.
+// Needed because deposit can be set to 0 at booking time and filled in later via an edit —
+// a plain UPDATE on a non-existent row is a silent no-op, which is how deposits used to vanish.
+async function syncDepositIncome(supabase, { bookingId, roomNo, customerName, newDeposit, userId }) {
+  const { data: rows } = await supabase
+    .from('transactions')
+    .select('id')
+    .eq('booking_id', bookingId)
+    .eq('category', 'ค่ามัดจำ')
+  const existing = rows ?? []
+
+  if (newDeposit > 0) {
+    if (existing.length > 0) {
+      await supabase.from('transactions').update({ amount: newDeposit }).eq('id', existing[0].id)
+      if (existing.length > 1) {
+        await supabase.from('transactions').delete().in('id', existing.slice(1).map(r => r.id))
+      }
+    } else {
+      const roomPart = roomNo ? ` ห้อง ${roomNo}` : ''
+      const namePart = customerName ? ` (${customerName})` : ''
+      await supabase.from('transactions').insert({
+        tx_date: getTodayBangkok(),
+        tx_type: 'income',
+        category: 'ค่ามัดจำ',
+        amount: newDeposit,
+        note: `รับมัดจำ${roomPart}${namePart}`,
+        booking_id: bookingId,
+        created_by: userId,
+      })
+    }
+  } else if (existing.length > 0) {
+    await supabase.from('transactions').delete().in('id', existing.map(r => r.id))
+  }
+}
+
+// Upsert the 'ค่าห้อง' (remaining balance) income row for a booking. Only creates a new row
+// once the booking has actually checked in/out — shared by checkinBooking and adminUpdateBooking
+// (editing status to 'checked_in' via the edit form must behave the same as pressing check-in).
+async function syncRoomIncome(supabase, { bookingId, roomNo, checkinDate, remaining, status, userId }) {
+  const { data: rows } = await supabase
+    .from('transactions')
+    .select('id')
+    .eq('booking_id', bookingId)
+    .eq('category', 'ค่าห้อง')
+  const existing = rows ?? []
+
+  if (existing.length > 0) {
+    if (remaining > 0) {
+      await supabase.from('transactions').update({ amount: remaining }).eq('id', existing[0].id)
+      if (existing.length > 1) {
+        await supabase.from('transactions').delete().in('id', existing.slice(1).map(r => r.id))
+      }
+    } else {
+      await supabase.from('transactions').delete().in('id', existing.map(r => r.id))
+    }
+  } else if (remaining > 0 && (status === 'checked_in' || status === 'checked_out')) {
+    await supabase.from('transactions').insert({
+      tx_date: checkinDate,
+      tx_type: 'income',
+      category: 'ค่าห้อง',
+      amount: remaining,
+      note: roomNo ? `รับเงินเช็คอิน ห้อง ${roomNo} (ส่วนที่เหลือ)` : `รับเงินเช็คอิน (ส่วนที่เหลือ)`,
+      booking_id: bookingId,
+      created_by: userId,
+    })
+  }
+}
+
 export async function createBooking({ roomId, customerId, newCustomer, channel, checkinDate, checkoutDate, price, deposit, note, idCardUrl, vehicleRegUrl, stayType, checkinTime, checkoutTime }) {
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
@@ -295,28 +363,15 @@ export async function checkinBooking(bookingId) {
   if (error) return { error: error.message }
 
   const remaining = roundCurrency(Number(booking.price) - Number(booking.deposit))
-  if (remaining > 0) {
-    // Guard against duplicate check-in inserts (defense in depth against double-clicks)
-    const { data: existingTx } = await supabase
-      .from('transactions')
-      .select('id')
-      .eq('booking_id', bookingId)
-      .eq('category', 'ค่าห้อง')
-      .limit(1)
-
-    if (!existingTx || existingTx.length === 0) {
-      const roomNo = booking.rooms?.room_no ?? ''
-      await supabase.from('transactions').insert({
-        tx_date: booking.checkin_date,
-        tx_type: 'income',
-        category: 'ค่าห้อง',
-        amount: remaining,
-        note: roomNo ? `รับเงินเช็คอิน ห้อง ${roomNo} (ส่วนที่เหลือ)` : `รับเงินเช็คอิน (ส่วนที่เหลือ)`,
-        booking_id: bookingId,
-        created_by: user.id,
-      })
-    }
-  }
+  // syncRoomIncome guards against duplicate inserts (defense in depth against double-clicks)
+  await syncRoomIncome(supabase, {
+    bookingId,
+    roomNo: booking.rooms?.room_no ?? '',
+    checkinDate: booking.checkin_date,
+    remaining,
+    status: 'checked_in',
+    userId: user.id,
+  })
 
   revalidatePath('/bookings')
   revalidatePath('/transactions')
@@ -385,7 +440,7 @@ export async function adminUpdateBooking(bookingId, fields, adminName, oldRoomNo
   // Fetch old booking to detect field changes for transaction sync + audit log
   const { data: oldBooking } = await supabase
     .from('bookings')
-    .select('price, deposit, checkin_date, checkout_date, checkin_time, checkout_time, room_id, stay_type, status, channel, note')
+    .select('price, deposit, checkin_date, checkout_date, checkin_time, checkout_time, room_id, stay_type, status, channel, note, customers(full_name)')
     .eq('id', bookingId)
     .single()
 
@@ -440,20 +495,28 @@ export async function adminUpdateBooking(bookingId, fields, adminName, oldRoomNo
       roomChanged ? { room_id: transferReason || null } : {})
   }
 
-  // Auto-sync transaction amounts when price or deposit changes
-  if (oldBooking && (newPrice !== Number(oldBooking.price) || newDeposit !== Number(oldBooking.deposit))) {
-    if (newDeposit >= 0) {
-      await supabase.from('transactions')
-        .update({ amount: newDeposit })
-        .eq('booking_id', bookingId)
-        .eq('category', 'ค่ามัดจำ')
+  // Auto-sync income rows ('ค่ามัดจำ' / 'ค่าห้อง') so they always reflect the saved booking —
+  // upsert, not just update, since an edit can introduce a deposit/remaining that never existed before
+  if (oldBooking) {
+    const currentRoomNo = roomChanged ? newRoomNo : oldRoomNo
+    const customerName = oldBooking.customers?.full_name ?? ''
+    const depositChanged = newDeposit !== Number(oldBooking.deposit)
+    const priceChanged = newPrice !== Number(oldBooking.price)
+    const statusBecameCheckedIn = oldBooking.status !== 'checked_in' && fields.status === 'checked_in'
+
+    if (depositChanged) {
+      await syncDepositIncome(supabase, { bookingId, roomNo: currentRoomNo, customerName, newDeposit, userId: user.id })
     }
-    const newRemaining = roundCurrency(newPrice - newDeposit)
-    if (newRemaining >= 0) {
-      await supabase.from('transactions')
-        .update({ amount: newRemaining })
-        .eq('booking_id', bookingId)
-        .eq('category', 'ค่าห้อง')
+    if (priceChanged || depositChanged || statusBecameCheckedIn) {
+      const newRemaining = roundCurrency(newPrice - newDeposit)
+      await syncRoomIncome(supabase, {
+        bookingId,
+        roomNo: currentRoomNo,
+        checkinDate: fields.checkin_date,
+        remaining: newRemaining,
+        status: fields.status,
+        userId: user.id,
+      })
     }
   }
 
